@@ -30,7 +30,8 @@ def run() -> None:
     )
     in_shape = np.prod(in_shape) #for linear networks
 
-    #Define model
+    #Define network
+    network = None
     if algorithm.lower() == "wp":
         dist_sampler = utils.make_dist_sampler(
             sigma,
@@ -60,10 +61,11 @@ def run() -> None:
     if optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(
             model.parameters(),
-            lr=learning_rate,
-        )
+            lr=learning_rate)
     elif optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+        fwd_optimizer = torch.optim.SGD(
+            model.parameters(), 
+            lr=learning_rate)
 
     #Choose Loss function
     if loss_func.lower() == "cce":
@@ -76,42 +78,22 @@ def run() -> None:
 
 
     for e in tqdm(range(nb_epochs)):
-        metrics = utils.update_metrics(
-            network,
-            metrics,
-            device,
-            "train",
-            train_loader,
-            loss_func,
-            e,
-            loud=True,
-            num_classes=out_shape,
-        )
-
-        metrics = utils.update_metrics(
-            network,
-            metrics,
-            device,
-            "test",
-            test_loader,
-            loss_func,
-            e,
-            loud=False,
-            num_classes=out_shape,
-        )
-
-
         if e < nb_epochs:
-            utils.train(
+            metrics = utils.next_epoch(
                 network,
+                metrics,
                 device,
-                train_loader,
                 fwd_optimizer,
-                e,
+                test_loader,
+                train_loader,
                 loss_func,
-                loud=False,
+                e,
+                loud_test=True,
+                loud_train=False,
                 num_classes=out_shape,
             )
+
+
         if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
             metrics["train"]["loss"][-1]
         ):

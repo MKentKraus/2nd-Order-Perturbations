@@ -91,7 +91,7 @@ def format_tin_val(datadir):
     print("Formatting val done")
 
 
-def load_dataset(dataset_importer, device, fltype, validation):
+def load_dataset(dataset_importer, device, fltype, validation, mean, std):
     if isinstance(dataset_importer, str) and dataset_importer.lower() == "tin":
 
         if os.path.exists("./datasets/tiny-imagenet-200/y_train.npy"):
@@ -338,23 +338,33 @@ def construct_dataloaders(
     return train_loader, test_loader, in_shape, out_shape
 
 
-def update_metrics(
+def next_epoch(
     model,
     metrics,
     device,
-    train_test,
-    loader,
+    optimizer,
+    test_loader,
+    train_loader,
     loss_func,
     epoch,
-    loud=False,
-    top5=False,
+    loud_test=True,
+    loud_train=False,
     num_classes=10,
 ):
+    """Trains and tests the model for one epoch. Saves loss and accuracy"""
+    loss, acc = train(
+                    model,device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
+                )
+
+    metrics["train"]["loss"].append(loss)
+    metrics["train"]["acc"].append(acc)
+
     loss, acc = test(
-        model, device, train_test, loader, loss_func, loud, top5, num_classes
-    )
-    metrics[train_test]["loss"].append(loss)
-    metrics[train_test]["acc"].append(acc)
+            model, device, test_loader, epoch, loss_func, loud_test, top5=False, num_classes=num_classes
+        )
+
+    metrics["test"]["loss"].append(loss)
+    metrics["test"]["acc"].append(acc)
 
     return metrics
 
@@ -388,7 +398,6 @@ def train(
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
         loss = model.train_step(data, target, onehots, loss_func)
-
         optimizer.step()
 
         if (batch_idx % log_interval == 0) and loud:
@@ -401,10 +410,11 @@ def train(
                     loss.item(),
                 )
             )
+    return loss, (100.0 * batch_idx / len(train_loader.dataset))
 
 
 def test(
-    model, device, train_test, test_loader, loss_func, loud=True, top5=False, num_classes=10
+    model, device, test_loader, epoch, loss_func, loud=True, top5=False, num_classes=10
 ):
     """
     Computes loss of model on test set
@@ -435,12 +445,13 @@ def test(
                 top5_correct += (
                     top5_pred.eq(target.view(-1, 1).expand_as(top5_pred)).sum().item()
                 )
-        test_loss /= len(test_loader)
+
+        #test_loss /= len(test_loader) #Why do we normalize the test loss obtained?
 
     if loud:
         print(
-            "\n{} set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
-                train_test,
+            "\n Test Epoch {}: Loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+                epoch,
                 test_loss,
                 correct,
                 len(test_loader.dataset),
@@ -456,7 +467,7 @@ def test(
                 (100.0 * top5_correct / len(test_loader.dataset)),
             ),
         )
-    return test_loss, (100.0 * correct / len(test_loader.dataset))
+    return test_loss, (100.0 * correct / len(test_loader.dataset)) 
 
 
 def init_metric(validation=False):
