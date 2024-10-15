@@ -1,3 +1,5 @@
+"""Dataset manipulation and network training functions"""
+
 import os
 import torch
 import numpy as np

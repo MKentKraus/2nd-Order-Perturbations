@@ -1,10 +1,12 @@
+"""Training task and network selection, main loop"""
+
 import random
 import numpy as np
 from tqdm import tqdm
 import torch
 import utils
 from wp import WPLinear
-from net import PerturbNet, BPNet
+from net import PerturbForwNet, BPNet
 
 def run() -> None:
     seed = 42
@@ -18,11 +20,11 @@ def run() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     optimizer_type = "sgd" #sgd or adam
     learning_rate = 1e-6 #1e-2 for CCE, 1e-6 for MSE
-    algorithm = "BP" #BP or WP
+    algorithm = "WP" #BP or WP
     sigma = 1e-3
     distribution = "normal"
     nb_epochs = 100
-    loss_func = "mse" #CCE
+    loss_func = "mse" #CCE or MSE
 
     # Load dataset
     train_loader, test_loader, in_shape, out_shape = utils.construct_dataloaders(
@@ -42,7 +44,7 @@ def run() -> None:
             WPLinear(in_shape, out_shape, clean_pass=True,
                      dist_sampler=dist_sampler, sample_wise=False),
         ).to(device)
-        network = PerturbNet(model)
+        network = PerturbForwNet(model)
 
     elif algorithm.lower() == "bp":
         model = torch.nn.Sequential(

@@ -1,3 +1,5 @@
+"""Weight perturbation core functionality"""
+
 import torch
 import torch.nn.functional as F
 
@@ -10,24 +12,29 @@ class WPLinearFunc(torch.autograd.Function):
         # Matrix multiplying both the clean and noisy forward signals
         output = torch.mm(input, weights.t())
         half_batch_width = len(input) // 2
-        noise_dim = half_batch_width if sample_wise else 1
+
+        noise_dim = half_batch_width if sample_wise else 1 #Whether the noise is unique or shared for each element of the batch, determined by sample_wise
+                                                        #by default, Clean pass is true and sample wise false. But this seems to allow for perturbing in two different directions for the two halves. 
 
         # Determining the shape of the noise
         # Noise shape based upon weight shape and batch size
-        noise_shape = [noise_dim] + [s for s in weights.shape]
+        noise_shape = [noise_dim] + list(weights.shape)
 
-        if clean_pass:
+        if clean_pass: 
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
         else:
+
             w_noise_1 = dist_sampler(noise_shape)
             if sample_wise:
                 output[:half_batch_width] += torch.einsum(
                     "ni,nki->nk", input[:half_batch_width], w_noise_1
                 )
+
             else:
                 output[:half_batch_width] += torch.einsum(
                     "ni,ki->nk", input[:half_batch_width], w_noise_1[0]
                 )
+
         w_noise_2 = dist_sampler(noise_shape)
         weight_diff = w_noise_1 - w_noise_2
 
@@ -40,19 +47,25 @@ class WPLinearFunc(torch.autograd.Function):
                 "ni,ki->nk", input[half_batch_width:], w_noise_2[0]
             )
 
+
+
+        #perturbing the biases
         b_noise_1, b_noise_2 = None, None
         bias_diff = None
-        if biases is not None:
+        if biases is not None: #When would this not be the case?
             noise_shape = [noise_dim] + [s for s in biases.shape]
 
+            #Determine whether to perturb the first half of the batch
             if clean_pass:
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
             else:
                 b_noise_1 = dist_sampler(noise_shape)
+
+            #Second half is always perturbed
             b_noise_2 = dist_sampler(noise_shape)
             bias_diff = b_noise_1 - b_noise_2
 
-            output[:half_batch_width] += biases + b_noise_1
+            output[:half_batch_width] += biases + b_noise_1 
             output[half_batch_width:] += biases + b_noise_2
 
         # compute the output
@@ -98,6 +111,7 @@ class WPLinear(torch.nn.Linear):
                 self.dist_sampler,
                 self.sample_wise,
             )
+
             half_batch_width = len(input) // 2
 
             self.weight_diff = weight_diff
@@ -110,9 +124,13 @@ class WPLinear(torch.nn.Linear):
                 self.square_norm += torch.sum(
                     self.bias_diff.reshape(noise_dim, -1) ** 2, axis=1
                 )
-        else:
+
+    
+        else: #Do not perturb if weights are not being trained.
             output = F.linear(input, self.weight, self.bias)
         return output
+
+
 
     @torch.inference_mode()
     def update_grads(self, scaling_factor):
