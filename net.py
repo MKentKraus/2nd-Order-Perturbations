@@ -13,9 +13,10 @@ class PerturbNet(torch.nn.Module):
         if self.training:
             x = torch.concatenate([x, x.clone()])
         return self.network(x)
+    
 
-    def apply_grad_scaling_to_noise_layers(self, network, scaling):
-        for child in network.children():
+    def apply_grad_scaling_to_noise_layers(self, network, scaling): 
+        for child in network.children(): #iterates over layers of the network.
             # are you a container?
             if len(list(child.children())) > 0:
                 self.apply_grad_scaling_to_noise_layers(child, scaling)
@@ -71,7 +72,6 @@ class PerturbNet(torch.nn.Module):
             loss_func(output[: len(data)], target, onehots)
         ).item()  # sum up batch loss
         return loss, output[: len(data)]
-    
 
 class BPNet(torch.nn.Module):
     def __init__(
@@ -90,7 +90,7 @@ class BPNet(torch.nn.Module):
     def train_step(self, data, target, onehots, loss_func):
         self.train()
         output = self(data)
-        loss = loss_func(output[: len(data)], target, onehots)
+        loss = loss_func(output, target, onehots)
         total_loss = loss.mean()
         total_loss.backward()
 
