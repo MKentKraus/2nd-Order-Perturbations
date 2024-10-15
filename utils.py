@@ -1,9 +1,9 @@
+import os
 import torch
 import numpy as np
 import torchvision
 import matplotlib.pyplot as plt
 import torchvision.transforms as v2
-import os
 
 
 def make_dist_sampler(
@@ -91,7 +91,7 @@ def format_tin_val(datadir):
     print("Formatting val done")
 
 
-def load_dataset(dataset_importer, device, fltype, validation, mean, std):
+def load_dataset(dataset_importer, device, fltype, validation):
     if isinstance(dataset_importer, str) and dataset_importer.lower() == "tin":
 
         if os.path.exists("./datasets/tiny-imagenet-200/y_train.npy"):
@@ -351,7 +351,7 @@ def update_metrics(
     num_classes=10,
 ):
     loss, acc = test(
-        model, device, train_test, loader, loud, loss_func, top5, num_classes
+        model, device, train_test, loader, loss_func, loud, top5, num_classes
     )
     metrics[train_test]["loss"].append(loss)
     metrics[train_test]["acc"].append(acc)
@@ -370,6 +370,17 @@ def train(
     loud=False,
     num_classes=10,
 ):
+    """
+    Trains model for one epoch
+
+    Parameters
+    ----------
+    loud : bool 
+        If True, prints average loss and accuracy
+
+    log_interval : int
+        Determines the number of batches between the logging of accuracy
+    """
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
@@ -393,8 +404,19 @@ def train(
 
 
 def test(
-    model, device, train_test, test_loader, loud, loss_func, top5=False, num_classes=10
+    model, device, train_test, test_loader, loss_func, loud=True, top5=False, num_classes=10
 ):
+    """
+    Computes loss of model on test set
+    Parameters
+    ----------
+    loud : bool 
+        If True, prints average loss and accuracy at the end of epoch
+    top5 : bool
+        If True, computes accuracy for the top 5 predictions of each batch element.   
+    
+    """
+
     model.eval()
     test_loss = 0
     correct = 0
@@ -438,20 +460,32 @@ def test(
 
 
 def init_metric(validation=False):
+    """
+    Define Dictionary to hold loss and accuracy for trained model.
+    
+    Parameters
+    ----------
+    validation : bool
+        If True, dictionary contains "val" instead of "test" keyword.
+
+    Returns
+    -------
+    Dictionary of Dictionaries. 
+    """
     if validation:
         return {"train": {"loss": [], "acc": []}, "val": {"loss": [], "acc": []}}
-    else:
-        return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
+    return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
 
 
 def plot_metrics(metrics):
+    """Plot loss and accuracy over epochs for training and testing dataset."""
     plt.subplot(2, 1, 1)
     plt.ylabel("Loss")
     plt.xlabel("Epoch")
     plt.plot(metrics["loss"]["train"])
     plt.plot(metrics["loss"]["test"])
     plt.subplot(2, 1, 2)
-    plt.ylabel("accuracy")
+    plt.ylabel("Accuracy")
     plt.xlabel("Epoch")
     plt.plot(metrics["acc"]["train"])
     plt.plot(metrics["acc"]["test"])
