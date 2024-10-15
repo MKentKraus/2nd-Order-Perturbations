@@ -78,8 +78,8 @@ def run() -> None:
 
 
     for e in tqdm(range(nb_epochs)):
-        if e < nb_epochs:
-            metrics = utils.next_epoch(
+        
+        metrics = utils.next_epoch(
                 network,
                 metrics,
                 device,

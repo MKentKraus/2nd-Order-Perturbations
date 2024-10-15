@@ -339,7 +339,7 @@ def construct_dataloaders(
 
 
 def next_epoch(
-    model,
+    network,
     metrics,
     device,
     optimizer,
@@ -351,16 +351,31 @@ def next_epoch(
     loud_train=False,
     num_classes=10,
 ):
-    """Trains and tests the model for one epoch. Saves loss and accuracy"""
+    """Trains and tests the network for one epoch. 
+    Returns loss and accuracy.
+
+    Parameters
+    ----------
+    loud_test: bool 
+        If True, prints average loss and accuracy during the evaluation
+
+    loud_train: bool 
+        If True, prints average loss and accuracy during training. How often is determined by log_interval.   
+
+    log_interval : int
+        During training, controls how many batches there are between printing the models new accuracy
+    
+    
+    """
     loss, acc = train(
-                    model,device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
+                    network,device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
                 )
 
     metrics["train"]["loss"].append(loss)
     metrics["train"]["acc"].append(acc)
 
     loss, acc = test(
-            model, device, test_loader, epoch, loss_func, loud_test, top5=False, num_classes=num_classes
+            network, device, test_loader, epoch, loss_func, loud_test, num_classes=num_classes
         )
 
     metrics["test"]["loss"].append(loss)
@@ -414,7 +429,7 @@ def train(
 
 
 def test(
-    model, device, test_loader, epoch, loss_func, loud=True, top5=False, num_classes=10
+    model, device, test_loader, epoch, loss_func, loud=True, num_classes=10
 ):
     """
     Computes loss of model on test set
@@ -422,16 +437,12 @@ def test(
     ----------
     loud : bool 
         If True, prints average loss and accuracy at the end of epoch
-    top5 : bool
-        If True, computes accuracy for the top 5 predictions of each batch element.   
-    
     """
 
     model.eval()
     test_loss = 0
     correct = 0
-    if top5:
-        top5_correct = 0
+
     with torch.no_grad():
         for data, target in test_loader:
             onehots = torch.nn.functional.one_hot(target, num_classes).to(device)
@@ -440,13 +451,6 @@ def test(
             test_loss += loss
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
-            if top5:
-                _, top5_pred = output.topk(5, dim=1, largest=True, sorted=True)
-                top5_correct += (
-                    top5_pred.eq(target.view(-1, 1).expand_as(top5_pred)).sum().item()
-                )
-
-        #test_loss /= len(test_loader) #Why do we normalize the test loss obtained?
 
     if loud:
         print(
@@ -459,14 +463,6 @@ def test(
             )
         )
 
-    if top5:
-        return (
-            test_loss,
-            (
-                (100.0 * correct / len(test_loader.dataset)),
-                (100.0 * top5_correct / len(test_loader.dataset)),
-            ),
-        )
     return test_loss, (100.0 * correct / len(test_loader.dataset)) 
 
 
@@ -502,8 +498,3 @@ def plot_metrics(metrics):
     plt.plot(metrics["acc"]["test"])
 
 
-def conv_layer_shape_change(in_dim, kernel_size, stride, padding, dilation):
-    out_dim = int(
-        ((in_dim + 2 * padding - dilation * (kernel_size - 1) - 1) / stride) + 1
-    )
-    return out_dim
