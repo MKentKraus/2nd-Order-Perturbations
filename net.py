@@ -57,10 +57,7 @@ class PerturbForwNet(torch.nn.Module):
     def train_step(self, data, target, onehots, loss_func):
         
         #Get current models loss and accuracy
-        self.eval() 
-        output = self(data) 
-        clean_loss = loss_func(output, target, onehots) 
-
+        loss, _ = test_step(data, target, onehots, loss_func)
 
         #get two points to determine gradient
         self.train()
