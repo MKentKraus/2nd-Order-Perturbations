@@ -44,8 +44,8 @@ def run() -> None:
             device)
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, clean_pass=False,
-                     dist_sampler=dist_sampler, sample_wise=False),
+            WPLinear(in_shape, out_shape, clean_pass=True,
+                     dist_sampler=dist_sampler, sample_wise=False, direction="Cent"),
         ).to(device)
         network = PerturbForwNet(model)
 

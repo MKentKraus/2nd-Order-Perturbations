@@ -485,6 +485,13 @@ def init_metric(validation=False):
         return {"train": {"loss": [], "acc": []}, "val": {"loss": [], "acc": []}}
     return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
 
+def add_noise(data, noise, sample_wise):
+
+    if sample_wise:
+        out = torch.einsum("ni,nki->nk", data, noise)
+    else:
+        out = torch.einsum("ni,ki->nk", data, noise)
+    return out
 
 def plot_metrics(metrics):
     """Plot loss and accuracy over epochs for training and testing dataset."""

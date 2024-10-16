@@ -2,62 +2,38 @@
 
 import torch
 import torch.nn.functional as F
-
+from utils import add_noise
 
 class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weights"""
 
     @staticmethod
-    def forward(ctx, input, weights, biases, clean_pass, dist_sampler, sample_wise):
+    def forward(ctx, input, weights, biases, clean_pass, dist_sampler, sample_wise, direction='For'):
         # Matrix multiplying both the clean and noisy forward signals
         output = torch.mm(input, weights.t())
         half_batch_width = len(input) // 2
 
         noise_dim = half_batch_width if sample_wise else 1 #Whether the noise is unique or shared for each element of the batch, determined by sample_wise
-                                                        #by default, Clean pass is true and sample wise false. But this seems to allow for perturbing in two different directions for the two halves. 
+
 
         # Determining the shape of the noise
         # Noise shape based upon weight shape and batch size
         noise_shape = list(weights.shape)
- 
         if sample_wise:
             noise_shape.insert(0,noise_dim)
-
 
 
         ###Perturb original data
         if clean_pass:
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
-
         else:
             w_noise_1 = dist_sampler(noise_shape)
-            if sample_wise:
-                output[:half_batch_width] += torch.einsum(
-                    "ni,nki->nk", input[:half_batch_width], w_noise_1
-                )
-
-            else:
-                output[:half_batch_width] += torch.einsum(
-                    "ni,ki->nk", input[:half_batch_width], w_noise_1
-                )
-
-
-
-
+            output[:half_batch_width] += add_noise(input[:half_batch_width],w_noise_1, sample_wise)
 
         ###Perturb copy of data
         w_noise_2 = dist_sampler(noise_shape)
-        weight_diff = w_noise_1 - w_noise_2
-
-        if sample_wise:
-            output[half_batch_width:] += torch.einsum(
-                "ni,nki->nk", input[half_batch_width:], w_noise_2
-            )
-        else:
-            output[half_batch_width:] += torch.einsum(
-                "ni,ki->nk", input[half_batch_width:], w_noise_2
-            )
-
+        weight_diff = w_noise_1 - w_noise_2        
+        output[half_batch_width:] += add_noise(input[half_batch_width:], w_noise_2, sample_wise)
 
 
         #perturbing the biases
@@ -69,7 +45,6 @@ class WPLinearFunc(torch.autograd.Function):
             else:
                 noise_shape = [noise_dim]
 
-
             #Samples noise to add to biases. If sample_wise, different noise is added to each bias
             if clean_pass:
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
@@ -77,7 +52,6 @@ class WPLinearFunc(torch.autograd.Function):
                     b_noise_2 = dist_sampler(noise_shape)
                 else:
                     b_noise_2 = dist_sampler(noise_shape).expand(biases.shape)
-
             elif sample_wise:
                 b_noise_1 = dist_sampler(noise_shape)
                 b_noise_2 = dist_sampler(noise_shape)
@@ -112,6 +86,7 @@ class WPLinear(torch.nn.Linear):
         clean_pass: bool = False,
         dist_sampler: torch.distributions.Distribution = None,
         sample_wise: bool = False,
+        direction: str = "For",
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -119,6 +94,7 @@ class WPLinear(torch.nn.Linear):
         self.clean_pass = clean_pass
         self.dist_sampler = dist_sampler
         self.sample_wise = sample_wise
+        self.direction = direction
         self.square_norm = None
         self.weight_diff = None
         self.bias_diff = None
