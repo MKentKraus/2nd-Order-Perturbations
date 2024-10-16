@@ -485,12 +485,12 @@ def init_metric(validation=False):
         return {"train": {"loss": [], "acc": []}, "val": {"loss": [], "acc": []}}
     return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
 
-def add_noise(data, noise, sample_wise):
-
+def add_noise(weights: torch.Tensor, noise: torch.Tensor, sample_wise: bool):
+    """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
     if sample_wise:
-        out = torch.einsum("ni,nki->nk", data, noise)
+        out = torch.einsum("ni,nki->nk", weights, noise)
     else:
-        out = torch.einsum("ni,ki->nk", data, noise)
+        out = torch.einsum("ni,ki->nk", weights, noise)
     return out
 
 def plot_metrics(metrics):

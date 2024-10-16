@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import utils
+import wandb
 from wp import WPLinear
 from net import PerturbForwNet, BPNet
 
@@ -26,7 +27,7 @@ def run() -> None:
     algorithm = "WP" #BP or WP
     sigma = 1e-3
     distribution = "normal"
-    nb_epochs = 100
+    nb_epochs = 5
     loss_func = "mse" #CCE or MSE
 
     # Load dataset
@@ -83,7 +84,6 @@ def run() -> None:
 
 
     for e in tqdm(range(nb_epochs)):
-        
         metrics = utils.next_epoch(
                 network,
                 metrics,
@@ -105,7 +105,8 @@ def run() -> None:
             print("NaN detected, aborting training")
             break
 
-    #To do, save model. 
+    torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/test.pt")
+    np.save("2nd-Order-Perturbations/results//metrics/test.npy", metrics)
 
 if __name__ == "__main__":
     run()
