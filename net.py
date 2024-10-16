@@ -63,8 +63,9 @@ class PerturbForwNet(torch.nn.Module):
         # Multiply grad by loss differential and normalize with unit norms
         loss_differential = clean_loss - noisy_loss #change to CDF
         normalization = self.get_normalization(self.network)
-        grad_scaling = loss_differential * normalization
-        self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
+        grad_scaling = loss_differential * normalization #normalizes the loss
+
+        self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling) #updates the gradient of the params
 
         return clean_loss.mean().item()
 

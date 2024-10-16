@@ -18,12 +18,18 @@ class WPLinearFunc(torch.autograd.Function):
 
         # Determining the shape of the noise
         # Noise shape based upon weight shape and batch size
-        noise_shape = [noise_dim] + list(weights.shape)
+        noise_shape = list(weights.shape)
+ 
+        if sample_wise:
+            noise_shape.insert(0,noise_dim)
 
-        if clean_pass: 
+
+
+        ###Perturb original data
+        if clean_pass:
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
-        else:
 
+        else:
             w_noise_1 = dist_sampler(noise_shape)
             if sample_wise:
                 output[:half_batch_width] += torch.einsum(
@@ -32,9 +38,14 @@ class WPLinearFunc(torch.autograd.Function):
 
             else:
                 output[:half_batch_width] += torch.einsum(
-                    "ni,ki->nk", input[:half_batch_width], w_noise_1[0]
+                    "ni,ki->nk", input[:half_batch_width], w_noise_1
                 )
 
+
+
+
+
+        ###Perturb copy of data
         w_noise_2 = dist_sampler(noise_shape)
         weight_diff = w_noise_1 - w_noise_2
 
@@ -44,7 +55,7 @@ class WPLinearFunc(torch.autograd.Function):
             )
         else:
             output[half_batch_width:] += torch.einsum(
-                "ni,ki->nk", input[half_batch_width:], w_noise_2[0]
+                "ni,ki->nk", input[half_batch_width:], w_noise_2
             )
 
 
@@ -52,17 +63,33 @@ class WPLinearFunc(torch.autograd.Function):
         #perturbing the biases
         b_noise_1, b_noise_2 = None, None
         bias_diff = None
-        if biases is not None: #When would this not be the case?
-            noise_shape = [noise_dim] + [s for s in biases.shape]
+        if biases is not None: 
+            if sample_wise:
+                noise_shape = [noise_dim] + list(biases.shape)
+            else:
+                noise_shape = [noise_dim]
 
-            #Determine whether to perturb the first half of the batch
+
+            #Samples noise to add to biases. If sample_wise, different noise is added to each bias
             if clean_pass:
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
-            else:
+                if sample_wise:
+                    b_noise_2 = dist_sampler(noise_shape)
+                else:
+                    b_noise_2 = dist_sampler(noise_shape).expand(biases.shape)
+
+            elif sample_wise:
                 b_noise_1 = dist_sampler(noise_shape)
+                b_noise_2 = dist_sampler(noise_shape)
+            else:
+                b_noise_1 = dist_sampler(noise_shape).expand(biases.shape) #all biases have the same perturbation
+                b_noise_2 = dist_sampler(noise_shape).expand(biases.shape)
+            
+
 
             #Second half is always perturbed
-            b_noise_2 = dist_sampler(noise_shape)
+            
+
             bias_diff = b_noise_1 - b_noise_2
 
             output[:half_batch_width] += biases + b_noise_1 
@@ -117,6 +144,7 @@ class WPLinear(torch.nn.Linear):
             self.weight_diff = weight_diff
             self.bias_diff = bias_diff
             noise_dim = half_batch_width if self.sample_wise else 1
+
             self.square_norm = torch.sum(
                 (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1
             )
