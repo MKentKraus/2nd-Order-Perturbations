@@ -15,7 +15,7 @@ class PerturbForwNet(torch.nn.Module):
         if self.training:
             x = torch.concatenate([x, x.clone()])
         return self.network(x)
-    
+
 
     def apply_grad_scaling_to_noise_layers(self, network, scaling): 
         for child in network.children(): #iterates over layers of the network.
@@ -49,25 +49,33 @@ class PerturbForwNet(torch.nn.Module):
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
-        # Duplicate data for network clean/noisy pass
+        
+        #Get current models loss and accuracy
+        self.eval() 
+        output = self(data) 
+        clean_loss = loss_func(output, target, onehots) 
+
+
+        #get two points to determine gradient
         self.train()
+
         output = self(data)
 
-        clean_loss = loss_func(
-            output[: len(data)], target, onehots
-        )  # sum up batch loss
-        noisy_loss = loss_func(
-            output[len(data) :], target, onehots
-        )  # sum up batch loss
+        w1_loss = loss_func(output[: len(data)], target, onehots)  # sum up batch loss under first set of weights (can but do not have to be the clean weights)
+        w2_loss = loss_func(output[len(data) :], target, onehots)  # sum up batch loss
 
         # Multiply grad by loss differential and normalize with unit norms
-        loss_differential = clean_loss - noisy_loss #change to CDF
+        loss_differential = w1_loss - w2_loss 
         normalization = self.get_normalization(self.network)
         grad_scaling = loss_differential * normalization #normalizes the loss
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling) #updates the gradient of the params
 
         return clean_loss.mean().item()
+
+
+
+
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
