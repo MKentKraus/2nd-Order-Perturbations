@@ -25,14 +25,12 @@ class WPLinearFunc(torch.autograd.Function):
         ###Perturb original data
         if pert_type.lower() == "clean":
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
-            print(w_noise_1)
         else:
             w_noise_1 = dist_sampler(noise_shape)
             output[:half_batch_width] += add_noise(input[:half_batch_width],w_noise_1, sample_wise)
             
         ###Perturb copy of data
         if pert_type.lower() == "cent":
-            print("am here")
             w_noise_2 = torch.mul(w_noise_1, -1) #gets vector of same magnitude as w_noise_1 in the opposite direction
         else:
             w_noise_2 = dist_sampler(noise_shape)
