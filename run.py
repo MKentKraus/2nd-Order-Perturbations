@@ -1,5 +1,5 @@
 """Training task and network selection, main loop"""
-
+import os
 import random
 import numpy as np
 from tqdm import tqdm
@@ -17,6 +17,9 @@ def run() -> None:
 
     dataset = "MNIST"
     batch_size = 128
+    SELECTED_DEVICE = '8'
+    print(f'Setting CUDA visible devices to [{SELECTED_DEVICE}]')
+    os.environ['CUDA_VISIBLE_DEVICES'] = f'{SELECTED_DEVICE}'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     optimizer_type = "sgd" #sgd or adam
     learning_rate = 1e-6 #1e-2 for CCE, 1e-6 for MSE
@@ -41,7 +44,7 @@ def run() -> None:
             device)
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, clean_pass=True,
+            WPLinear(in_shape, out_shape, clean_pass=False,
                      dist_sampler=dist_sampler, sample_wise=False),
         ).to(device)
         network = PerturbForwNet(model)
