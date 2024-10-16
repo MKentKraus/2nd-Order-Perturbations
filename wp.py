@@ -8,7 +8,7 @@ class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weights"""
 
     @staticmethod
-    def forward(ctx, input, weights, biases, clean_pass, dist_sampler, sample_wise, direction='Ran'):
+    def forward(ctx, input, weights, biases, pert_type, dist_sampler, sample_wise):
         # Matrix multiplying both the clean and noisy forward signals
         output = torch.mm(input, weights.t())
         half_batch_width = len(input) // 2
@@ -23,36 +23,44 @@ class WPLinearFunc(torch.autograd.Function):
 
 
         ###Perturb original data
-        if clean_pass:
+        if pert_type.lower() == "clean":
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
+            print(w_noise_1)
         else:
             w_noise_1 = dist_sampler(noise_shape)
             output[:half_batch_width] += add_noise(input[:half_batch_width],w_noise_1, sample_wise)
-
+            
         ###Perturb copy of data
-        w_noise_2 = dist_sampler(noise_shape)
-        weight_diff = w_noise_1 - w_noise_2        
+        if pert_type.lower() == "cent":
+            print("am here")
+            w_noise_2 = torch.mul(w_noise_1, -1) #gets vector of same magnitude as w_noise_1 in the opposite direction
+        else:
+            w_noise_2 = dist_sampler(noise_shape)
+
+
+        weight_diff = torch.sub(w_noise_1,w_noise_2)        
         output[half_batch_width:] += add_noise(input[half_batch_width:], w_noise_2, sample_wise)
 
 
         #perturbing the biases
         b_noise_1, b_noise_2 = None, None
         bias_diff = None
-        if biases is not None: 
-
+        if biases is not None:
 
             noise_shape = [noise_dim] + list(biases.shape)
 
-
             #Samples noise to add to biases. Second half is always perturbed
-            if clean_pass:
+            if pert_type.lower() == "clean":
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
                 b_noise_2 = dist_sampler(noise_shape)
+            elif pert_type.lower() == "cent":                   
+                b_noise_1 = dist_sampler(noise_shape) 
+                b_noise_2 = torch.mul(b_noise_1, -1)
             else:
                 b_noise_1 = dist_sampler(noise_shape) 
                 b_noise_2 = dist_sampler(noise_shape)
 
-            bias_diff = b_noise_1 - b_noise_2
+            bias_diff = torch.sub(b_noise_1, b_noise_2)
 
             output[:half_batch_width] += biases + b_noise_1
             output[half_batch_width:] += biases + b_noise_2
@@ -70,18 +78,16 @@ class WPLinear(torch.nn.Linear):
     def __init__(
         self,
         *args,
-        clean_pass: bool = False,
+        pert_type: str = "Clean",
         dist_sampler: torch.distributions.Distribution = None,
         sample_wise: bool = False,
-        direction: str = "For",
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
 
-        self.clean_pass = clean_pass
+        self.pert_type = pert_type
         self.dist_sampler = dist_sampler
         self.sample_wise = sample_wise
-        self.direction = direction
         self.square_norm = None
         self.weight_diff = None
         self.bias_diff = None
@@ -97,7 +103,7 @@ class WPLinear(torch.nn.Linear):
                 input,
                 self.weight,
                 self.bias,
-                self.clean_pass,
+                self.pert_type,
                 self.dist_sampler,
                 self.sample_wise,
             )

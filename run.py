@@ -44,8 +44,8 @@ def run() -> None:
             device)
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, clean_pass=True,
-                     dist_sampler=dist_sampler, sample_wise=False, direction="Cent"),
+            WPLinear(in_shape, out_shape, pert_type = "clean",
+                     dist_sampler=dist_sampler, sample_wise=False),
         ).to(device)
         network = PerturbForwNet(model)
 
@@ -104,6 +104,8 @@ def run() -> None:
         ):
             print("NaN detected, aborting training")
             break
+
+    #To do, save model. 
 
 if __name__ == "__main__":
     run()
