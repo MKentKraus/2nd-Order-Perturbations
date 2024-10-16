@@ -8,13 +8,12 @@ class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weights"""
 
     @staticmethod
-    def forward(ctx, input, weights, biases, clean_pass, dist_sampler, sample_wise, direction='For'):
+    def forward(ctx, input, weights, biases, clean_pass, dist_sampler, sample_wise, direction='Ran'):
         # Matrix multiplying both the clean and noisy forward signals
         output = torch.mm(input, weights.t())
         half_batch_width = len(input) // 2
 
         noise_dim = half_batch_width if sample_wise else 1 #Whether the noise is unique or shared for each element of the batch, determined by sample_wise
-
 
         # Determining the shape of the noise
         # Noise shape based upon weight shape and batch size
@@ -40,35 +39,23 @@ class WPLinearFunc(torch.autograd.Function):
         b_noise_1, b_noise_2 = None, None
         bias_diff = None
         if biases is not None: 
-            if sample_wise:
-                noise_shape = [noise_dim] + list(biases.shape)
-            else:
-                noise_shape = [noise_dim]
 
-            #Samples noise to add to biases. If sample_wise, different noise is added to each bias
+
+            noise_shape = [noise_dim] + list(biases.shape)
+
+
+            #Samples noise to add to biases. Second half is always perturbed
             if clean_pass:
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
-                if sample_wise:
-                    b_noise_2 = dist_sampler(noise_shape)
-                else:
-                    b_noise_2 = dist_sampler(noise_shape).expand(biases.shape)
-            elif sample_wise:
-                b_noise_1 = dist_sampler(noise_shape)
                 b_noise_2 = dist_sampler(noise_shape)
             else:
-                b_noise_1 = dist_sampler(noise_shape).expand(biases.shape) #all biases have the same perturbation
-                b_noise_2 = dist_sampler(noise_shape).expand(biases.shape)
-            
-
-
-            #Second half is always perturbed
-            
+                b_noise_1 = dist_sampler(noise_shape) 
+                b_noise_2 = dist_sampler(noise_shape)
 
             bias_diff = b_noise_1 - b_noise_2
 
-            output[:half_batch_width] += biases + b_noise_1 
+            output[:half_batch_width] += biases + b_noise_1
             output[half_batch_width:] += biases + b_noise_2
-
         # compute the output
         return output, weight_diff, bias_diff
 
