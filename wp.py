@@ -2,7 +2,8 @@
 
 import torch
 import torch.nn.functional as F
-from utils import add_noise
+
+
 
 class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weights"""
@@ -19,7 +20,7 @@ class WPLinearFunc(torch.autograd.Function):
         # Noise shape based upon weight shape and batch size
         noise_shape = list(weights.shape)
         if sample_wise:
-            noise_shape.insert(0,noise_dim)
+            noise_shape.insert(0, noise_dim)
 
 
         ###Perturb original data
@@ -27,8 +28,8 @@ class WPLinearFunc(torch.autograd.Function):
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
         else:
             w_noise_1 = dist_sampler(noise_shape)
-            output[:half_batch_width] += add_noise(input[:half_batch_width],w_noise_1, sample_wise)
-            
+            output[:half_batch_width] += add_noise(input[:half_batch_width], w_noise_1, sample_wise)
+
         ###Perturb copy of data
         if pert_type.lower() == "cent":
             w_noise_2 = torch.mul(w_noise_1, -1) #gets vector of same magnitude as w_noise_1 in the opposite direction
@@ -36,8 +37,9 @@ class WPLinearFunc(torch.autograd.Function):
             w_noise_2 = dist_sampler(noise_shape)
 
 
-        weight_diff = torch.sub(w_noise_1,w_noise_2)        
+        weight_diff = torch.sub(w_noise_1, w_noise_2)
         output[half_batch_width:] += add_noise(input[half_batch_width:], w_noise_2, sample_wise)
+
 
 
         #perturbing the biases
@@ -65,9 +67,13 @@ class WPLinearFunc(torch.autograd.Function):
         # compute the output
         return output, weight_diff, bias_diff
 
+
+
     @staticmethod
     def backward(ctx, grad_output):
         return None, None, None, None, None
+    #https://pytorch.org/docs/stable/notes/extending.html
+    #https://discuss.pytorch.org/t/autograd-output-in-a-simple-custom-linear-layer/47274
 
 
 class WPLinear(torch.nn.Linear):
@@ -143,3 +149,12 @@ class WPLinear(torch.nn.Linear):
 
     def get_number_perturbed_params(self):
         return self.weight.numel() + (self.bias.numel() if self.bias is not None else 0)
+
+@staticmethod
+def add_noise(weights: torch.Tensor, noise: torch.Tensor, sample_wise: bool):
+        """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
+        if sample_wise:
+            out = torch.einsum("ni,nki->nk", weights, noise)
+        else:
+            out = torch.einsum("ni,ki->nk", weights, noise)
+        return out
