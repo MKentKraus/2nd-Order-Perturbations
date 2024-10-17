@@ -351,6 +351,7 @@ def next_epoch(
     epoch,
     loud_test=True,
     loud_train=False,
+    wandb=None,
     num_classes=10,
 ):
     """Trains and tests the network for one epoch. 
@@ -370,26 +371,27 @@ def next_epoch(
     
     """
 
-    loss, acc = test(
+    test_loss, test_acc = test(
             network, device, test_loader, epoch, loss_func, loud_test, num_classes=num_classes
         )
 
-    metrics["test"]["loss"].append(loss)
-    metrics["test"]["acc"].append(acc)
+    metrics["test"]["loss"].append(test_loss)
+    metrics["test"]["acc"].append(test_acc)
 
-    loss, acc = test(
+    train_loss, train_acc = test(
             network, device, train_loader, epoch, loss_func, loud_train, num_classes=num_classes
         )
 
-    metrics["train"]["loss"].append(loss)
-    metrics["train"]["acc"].append(acc)
+    metrics["train"]["loss"].append(train_loss)
+    metrics["train"]["acc"].append(train_acc)
 
 
     _, _ = train(
                     network, device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
                 )
 
-
+    if wandb is not None:
+        wandb.log(  {"test/loss": test_loss, "test/acc": test_acc, "train/loss": train_loss, "train/acc": train_acc}, step=epoch)
     return metrics
 
 
@@ -434,6 +436,7 @@ def train(
                     loss.item(),
                 )
             )
+    loss /= len(train_loader)
     return loss, (100.0 * batch_idx / len(train_loader.dataset))
 
 
@@ -471,7 +474,7 @@ def test(
                 100.0 * correct / len(test_loader.dataset),
             )
         )
-
+    test_loss /= len(test_loader)
     return test_loss, (100.0 * correct / len(test_loader.dataset)) 
 
 
@@ -505,3 +508,4 @@ def plot_metrics(metrics):
     plt.xlabel("Epoch")
     plt.plot(metrics["train"]["acc"])
     plt.plot(metrics["test"]["acc"])
+    plt.show()

@@ -6,51 +6,52 @@ from tqdm import tqdm
 import torch
 import utils
 import wandb
+import hydra
 from wp import WPLinear
 from net import PerturbForwNet, BPNet
+from omegaconf import OmegaConf, DictConfig
 
-def run() -> None:
-    seed = 42
+@hydra.main(version_base="1.3", config_path="", config_name="config")
+def run(config: DictConfig) -> None:
+    cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
+    print(config)
+    wandb.init(
+        config=cfg,
+        entity=config.wandb.entity,
+        project=config.wandb.project,
+        name=config.wandb.name,
+    )
+
     # Initializing random seeding
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    dataset = "MNIST"
-    batch_size = 128
+    torch.manual_seed(config.seed)
+    np.random.seed(config.seed)
+    random.seed(config.seed)
     SELECTED_DEVICE = '8'
     print(f'Setting CUDA visible devices to [{SELECTED_DEVICE}]')
     os.environ['CUDA_VISIBLE_DEVICES'] = f'{SELECTED_DEVICE}'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    optimizer_type = "sgd" #sgd or adam
-    learning_rate = 1e-6 #1e-2 for CCE, 1e-6 for MSE
-    algorithm = "WP" #BP or WP
-    sigma = 1e-3
-    distribution = "normal"
-    nb_epochs = 5
-    loss_func = "mse" #CCE or MSE
 
     # Load dataset
     train_loader, test_loader, in_shape, out_shape = utils.construct_dataloaders(
-        dataset, batch_size, device
+        config.dataset, config.batch_size, device
     )
     in_shape = np.prod(in_shape) #for linear networks
 
     #Define network
     network = None
-    if algorithm.lower() == "wp":
+    if config.algorithm.lower() == "wp":
         dist_sampler = utils.make_dist_sampler(
-            sigma,
-            distribution,
+            config.sigma,
+            config.distribution,
             device)
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, pert_type = "Cent",
+            WPLinear(in_shape, out_shape, config.pert_type,
                      dist_sampler=dist_sampler, sample_wise=False),
         ).to(device)
         network = PerturbForwNet(model)
 
-    elif algorithm.lower() == "bp":
+    elif config.algorithm.lower() == "bp":
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(in_shape, out_shape),
@@ -64,26 +65,26 @@ def run() -> None:
 
     # Define optimizers
     fwd_optimizer = None
-    if optimizer_type.lower() == "adam":
+    if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(
             model.parameters(),
-            lr=learning_rate)
-    elif optimizer_type.lower() == "sgd":
+            lr=config.learning_rate)
+    elif config.optimizer_type.lower() == "sgd":
         fwd_optimizer = torch.optim.SGD(
             model.parameters(), 
-            lr=learning_rate)
+            lr=config.learning_rate)
 
     #Choose Loss function
-    if loss_func.lower() == "cce":
+    if config.loss_func.lower() == "cce":
         loss_obj = torch.nn.CrossEntropyLoss(reduction="none")
         loss_func = lambda input, target, onehot: loss_obj(input, target)
-    elif loss_func.lower() == "mse":
+    elif config.loss_func.lower() == "mse":
         loss_obj = torch.nn.MSELoss(reduction="none")
         loss_func = lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
 
 
 
-    for e in tqdm(range(nb_epochs)):
+    for e in tqdm(range(config.nb_epochs)):
         metrics = utils.next_epoch(
                 network,
                 metrics,
@@ -95,6 +96,7 @@ def run() -> None:
                 e,
                 loud_test=True,
                 loud_train=False,
+                wandb=wandb,
                 num_classes=out_shape,
             )
 
@@ -105,8 +107,11 @@ def run() -> None:
             print("NaN detected, aborting training")
             break
 
-    torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/test.pt")
-    np.save("2nd-Order-Perturbations/results//metrics/test.npy", metrics)
+    torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/BP-MNIST-1e-6.pt")
+    np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
+
+    utils.plot_metrics(metrics)
+    wandb.finish()
 
 if __name__ == "__main__":
     run()
