@@ -55,11 +55,6 @@ class PerturbForwNet(torch.nn.Module):
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
-        
-        #Get current models loss and accuracy
-        loss, _ = test_step(data, target, onehots, loss_func)
-
-        #get two points to determine gradient
         self.train()
 
         output = self(data)
@@ -68,17 +63,13 @@ class PerturbForwNet(torch.nn.Module):
         w2_loss = loss_func(output[len(data) :], target, onehots)  # sum up batch loss
 
         # Multiply grad by loss differential and normalize with unit norms
-        loss_differential = w1_loss - w2_loss 
+        loss_differential = w1_loss - w2_loss
         normalization = self.get_normalization(self.network)
         grad_scaling = loss_differential * normalization #normalizes the loss
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling) #updates the gradient of the params
 
-        return clean_loss.mean().item()
-
-
-
-
+        return w1_loss.mean().item()
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):

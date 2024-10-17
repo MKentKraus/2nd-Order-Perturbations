@@ -369,12 +369,6 @@ def next_epoch(
     
     
     """
-    loss, acc = train(
-                    network,device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
-                )
-
-    metrics["train"]["loss"].append(loss)
-    metrics["train"]["acc"].append(acc)
 
     loss, acc = test(
             network, device, test_loader, epoch, loss_func, loud_test, num_classes=num_classes
@@ -382,6 +376,19 @@ def next_epoch(
 
     metrics["test"]["loss"].append(loss)
     metrics["test"]["acc"].append(acc)
+
+    loss, acc = test(
+            network, device, train_loader, epoch, loss_func, loud_test, num_classes=num_classes
+        )
+
+    metrics["train"]["loss"].append(loss)
+    metrics["train"]["acc"].append(acc)
+
+
+    _, _ = train(
+                    network, device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
+                )
+
 
     return metrics
 
@@ -485,13 +492,6 @@ def init_metric(validation=False):
         return {"train": {"loss": [], "acc": []}, "val": {"loss": [], "acc": []}}
     return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
 
-def add_noise(weights: torch.Tensor, noise: torch.Tensor, sample_wise: bool):
-    """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
-    if sample_wise:
-        out = torch.einsum("ni,nki->nk", weights, noise)
-    else:
-        out = torch.einsum("ni,ki->nk", weights, noise)
-    return out
 
 def plot_metrics(metrics):
     """Plot loss and accuracy over epochs for training and testing dataset."""
@@ -505,5 +505,3 @@ def plot_metrics(metrics):
     plt.xlabel("Epoch")
     plt.plot(metrics["acc"]["train"])
     plt.plot(metrics["acc"]["test"])
-
-
