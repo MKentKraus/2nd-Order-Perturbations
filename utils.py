@@ -378,7 +378,7 @@ def next_epoch(
     metrics["test"]["acc"].append(acc)
 
     loss, acc = test(
-            network, device, train_loader, epoch, loss_func, loud_test, num_classes=num_classes
+            network, device, train_loader, epoch, loss_func, loud_train, num_classes=num_classes
         )
 
     metrics["train"]["loss"].append(loss)
@@ -498,10 +498,10 @@ def plot_metrics(metrics):
     plt.subplot(2, 1, 1)
     plt.ylabel("Loss")
     plt.xlabel("Epoch")
-    plt.plot(metrics["loss"]["train"])
-    plt.plot(metrics["loss"]["test"])
+    plt.plot(metrics["train"]["loss"])
+    plt.plot(metrics["test"]["loss"])
     plt.subplot(2, 1, 2)
     plt.ylabel("Accuracy")
     plt.xlabel("Epoch")
-    plt.plot(metrics["acc"]["train"])
-    plt.plot(metrics["acc"]["test"])
+    plt.plot(metrics["train"]["acc"])
+    plt.plot(metrics["test"]["acc"])
