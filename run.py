@@ -8,27 +8,31 @@ import utils
 import wandb
 import hydra
 from wp import WPLinear
-from net import PerturbForwNet, BPNet
+from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 @hydra.main(version_base="1.3", config_path="", config_name="config")
 def run(config: DictConfig) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
     print(config)
-    wandb.init(
-        config=cfg,
-        entity=config.wandb.entity,
-        project=config.wandb.project,
-        name=config.wandb.name,
-    )
+
+    if config.wandb.use:
+        wandb.init(
+            config=cfg,
+            entity=config.wandb.entity,
+            project=config.wandb.project,
+            name=config.wandb.name,
+        )
+    else:
+        wandb = None
+    
 
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
     random.seed(config.seed)
-    SELECTED_DEVICE = '8'
-    print(f'Setting CUDA visible devices to [{SELECTED_DEVICE}]')
-    os.environ['CUDA_VISIBLE_DEVICES'] = f'{SELECTED_DEVICE}'
+    print(f'Setting CUDA visible devices to [{config.device}]')
+    os.environ['CUDA_VISIBLE_DEVICES'] = f'{config.device}'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load dataset
@@ -49,13 +53,16 @@ def run(config: DictConfig) -> None:
             WPLinear(in_shape, out_shape, config.pert_type,
                      dist_sampler=dist_sampler, sample_wise=False),
         ).to(device)
-        network = PerturbForwNet(model)
+
+        network = PerturbNet(model)
 
     elif config.algorithm.lower() == "bp":
+
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(in_shape, out_shape),
         ).to(device)
+
         network = BPNet(model)
 
 
@@ -111,7 +118,8 @@ def run(config: DictConfig) -> None:
     np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
 
     utils.plot_metrics(metrics)
-    wandb.finish()
+    if config.wandb.use:
+        wandb.finish()
 
 if __name__ == "__main__":
     run()
