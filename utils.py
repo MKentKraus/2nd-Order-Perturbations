@@ -378,6 +378,7 @@ def next_epoch(
     metrics["test"]["loss"].append(test_loss)
     metrics["test"]["acc"].append(test_acc)
 
+    
     train_loss, train_acc = test(
             network, device, train_loader, epoch, loss_func, loud_train, num_classes=num_classes
         )
@@ -454,11 +455,14 @@ def test(
     model.eval()
     test_loss = 0
     correct = 0
-
+    i = 0
     for data, target in test_loader:
+        i += 1
+        print(i)
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device)
         data, target = data.to(device), target.to(device)
-        t1, t2 = model.BP_grads(data, target, onehots, loss_func)
+        if(loud):
+            angle = model.compare_BPangles(data, target, onehots, loss_func)
         with torch.no_grad():
             loss, output = model.test_step(data, target, onehots, loss_func)
             test_loss += loss

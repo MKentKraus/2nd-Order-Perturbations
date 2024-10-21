@@ -47,9 +47,14 @@ class PerturbNet(torch.nn.Module):
         normalization = num_params / normalizer
         return normalization
     
-    def compare_BPangles(self, update_dir):
-        bp_grad = torch.zeros(update_dir.shape)
-        return torch.arccos(torch.clip(torch.dot(  update_dir / torch.linalg.vector_norm(update_dir), bp_grad / torch.linalg.vector_norm(bp_grad)), -1.0, 1.0))
+    def compare_BPangles(self, data, target, onehots, loss_func):
+        self.BP_update(data, target, onehots, loss_func)
+        BP_grads = self.get_grads()
+
+        self.train_step(data, target, onehots, loss_func)
+        WP_grads = self.get_grads()
+
+        return torch.arccos(torch.clip(torch.dot(  WP_grads / torch.linalg.vector_norm(WP_grads), BP_grads / torch.linalg.vector_norm(BP_grads)), -1.0, 1.0))
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
@@ -79,19 +84,21 @@ class PerturbNet(torch.nn.Module):
         loss = loss.item()
         return loss, output
 
-    def BP_grads(self, data, target, onehots, loss_func):
-        self.eval()
+    def get_grads(self):
+        grad_params = []
+        for param in self.network.parameters():
+            grad_params.append(param.grad.view(-1))
+        grad_params = torch.cat(grad_params)
+        return grad_params 
+
+    def BP_update(self, data, target, onehots, loss_func):
+        self.eval() #https://pytorch.org/tutorials/beginner/former_torchies/autograd_tutorial.html
         output = self.network(data).to(torch.float32)
         target = target.to(torch.float32)
         onehots = onehots.to(torch.float32)
         loss = loss_func(output, target, onehots)
         loss = loss.mean().to(torch.float32)
         loss.backward()
-        params = []
-        for param in self.network.parameters():
-            params.append(param.grad.view(-1))
-        params = torch.cat(params)
-        return loss.item(), params
 
 class BPNet(torch.nn.Module):
     def __init__(
