@@ -86,10 +86,12 @@ class PerturbNet(torch.nn.Module):
         onehots = onehots.to(torch.float32)
         loss = loss_func(output, target, onehots)
         loss = loss.mean().to(torch.float32)
-
         loss.backward()
-        grad = self.network[1].weight.grad #make into list
-        return loss.item(), grad
+        params = []
+        for param in self.network.parameters():
+            params.append(param.grad.view(-1))
+        params = torch.cat(params)
+        return loss.item(), params
 
 class BPNet(torch.nn.Module):
     def __init__(
