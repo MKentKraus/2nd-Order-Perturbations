@@ -459,7 +459,7 @@ def test(
     for data, target in test_loader:
         i += 1
         print(i)
-        onehots = torch.nn.functional.one_hot(target, num_classes).to(device)
+        onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
         if(loud):
             angle = model.compare_BPangles(data, target, onehots, loss_func)
