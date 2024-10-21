@@ -196,10 +196,10 @@ def load_dataset(dataset_importer, device, fltype, validation, mean, std):
 
     # Data to device (datasets small enough to fit directly)
     x_train = x_train.to(device).type(fltype)
-    y_train = y_train.type(torch.LongTensor).to(device)
+    y_train = y_train.type(torch.FloatTensor).to(device)
 
     x_test = x_test.to(device).type(fltype)
-    y_test = y_test.type(torch.LongTensor).to(device)
+    y_test = y_test.type(torch.FloatTensor).to(device)
 
     maxval = torch.max(x_train)
     x_train = x_train / maxval
@@ -455,10 +455,11 @@ def test(
     test_loss = 0
     correct = 0
 
-    with torch.no_grad():
-        for data, target in test_loader:
-            onehots = torch.nn.functional.one_hot(target, num_classes).to(device)
-            data, target = data.to(device), target.to(device)
+    for data, target in test_loader:
+        onehots = torch.nn.functional.one_hot(target, num_classes).to(device)
+        data, target = data.to(device), target.to(device)
+        t1, t2 = model.BP_grads(data, target, onehots, loss_func)
+        with torch.no_grad():
             loss, output = model.test_step(data, target, onehots, loss_func)
             test_loss += loss
             pred = output.argmax(dim=1, keepdim=True)

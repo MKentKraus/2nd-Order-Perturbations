@@ -99,34 +99,34 @@ class WPLinear(torch.nn.Linear):
     def __str__(self):
         return "WPLinear"
 
-    @torch.inference_mode()
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # A clean and noisy input are both processed by a layer to produce
         if self.training:
-            (output, weight_diff, bias_diff) = WPLinearFunc().apply(
-                input,
-                self.weight,
-                self.bias,
-                self.pert_type,
-                self.dist_sampler,
-                self.sample_wise,
-            )
-
-            half_batch_width = len(input) // 2
-
-            self.weight_diff = weight_diff
-            self.bias_diff = bias_diff
-            noise_dim = half_batch_width if self.sample_wise else 1
-
-            self.square_norm = torch.sum(
-                (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1
-            )
-            if self.bias is not None:
-                self.square_norm += torch.sum(
-                    self.bias_diff.reshape(noise_dim, -1) ** 2, axis=1
+            with torch.inference_mode():
+                (output, weight_diff, bias_diff) = WPLinearFunc().apply(
+                    input,
+                    self.weight,
+                    self.bias,
+                    self.pert_type,
+                    self.dist_sampler,
+                    self.sample_wise,
                 )
 
-    
+                half_batch_width = len(input) // 2
+
+                self.weight_diff = weight_diff
+                self.bias_diff = bias_diff
+                noise_dim = half_batch_width if self.sample_wise else 1
+
+                self.square_norm = torch.sum(
+                    (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1
+                )
+                if self.bias is not None:
+                    self.square_norm += torch.sum(
+                        self.bias_diff.reshape(noise_dim, -1) ** 2, axis=1
+                    )
+
+        
         else: #Do not perturb if weights are not being trained.
             output = F.linear(input, self.weight, self.bias)
         return output

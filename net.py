@@ -2,15 +2,15 @@
 
 import torch
 
-class PerturbForwNet(torch.nn.Module):
+class PerturbNet(torch.nn.Module):
     def __init__(
         self,
         network: torch.nn.Module,
     ):
-        super(PerturbForwNet, self).__init__()
+        super(PerturbNet, self).__init__()
         self.network = network
-
-    @torch.inference_mode()
+    
+    @torch.inference_mode
     def forward(self, x):
         if self.training:
             x = torch.concatenate([x, x.clone()])
@@ -48,9 +48,7 @@ class PerturbForwNet(torch.nn.Module):
         return normalization
     
     def compare_BPangles(self, update_dir):
-
-        bp_grad = torch.zeros(update_dir.size)
-        torch.dot()
+        bp_grad = torch.zeros(update_dir.shape)
         return torch.arccos(torch.clip(torch.dot(  update_dir / torch.linalg.vector_norm(update_dir), bp_grad / torch.linalg.vector_norm(bp_grad)), -1.0, 1.0))
 
     @torch.inference_mode()
@@ -74,12 +72,24 @@ class PerturbForwNet(torch.nn.Module):
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
         self.eval()
-        output = self(data)[: len(data)]
+        output = self(data)
         loss = torch.mean(
             loss_func(output, target, onehots)
-        ).item()  # sum up batch loss
+        )  # sum up batch loss
+        loss = loss.item()
         return loss, output
 
+    def BP_grads(self, data, target, onehots, loss_func):
+        self.eval()
+        output = self.network(data).to(torch.float32)
+        target = target.to(torch.float32)
+        onehots = onehots.to(torch.float32)
+        loss = loss_func(output, target, onehots)
+        loss = loss.mean().to(torch.float32)
+
+        loss.backward()
+        grad = self.network[1].weight.grad #make into list
+        return loss.item(), grad
 
 class BPNet(torch.nn.Module):
     def __init__(
