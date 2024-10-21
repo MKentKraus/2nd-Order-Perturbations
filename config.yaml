@@ -1,3 +1,4 @@
+HYDRA_FULL_ERROR: 1
 
 dataset: "MNIST"
 batch_size: 128
@@ -11,9 +12,12 @@ nb_epochs: 100
 loss_func: "mse" #CCE or MSE
 seed: 42
 device: "7"
+loud_test: False
+loud_train: True
+comp_angles: True
 
 wandb:
-  use: False
+  use: True
   project: MetaWP
   entity: brai-lab
-  name: BP-test-MNIST
+  name: WP-Cent-Angle-test

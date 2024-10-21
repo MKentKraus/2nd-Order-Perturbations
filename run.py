@@ -23,8 +23,6 @@ def run(config: DictConfig) -> None:
             project=config.wandb.project,
             name=config.wandb.name,
         )
-    else:
-        wandb = None
     
 
     # Initializing random seeding
@@ -48,13 +46,19 @@ def run(config: DictConfig) -> None:
             config.sigma,
             config.distribution,
             device)
+        
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             WPLinear(in_shape, out_shape, config.pert_type,
                      dist_sampler=dist_sampler, sample_wise=False),
         ).to(device)
 
-        network = PerturbNet(model)
+        model_bp = torch.nn.Sequential(
+            torch.nn.Flatten(),
+            torch.nn.Linear(in_shape, out_shape),
+        ).to(device)
+
+        network = PerturbNet(model, model_bp)
 
     elif config.algorithm.lower() == "bp":
 
@@ -67,7 +71,7 @@ def run(config: DictConfig) -> None:
 
 
     # Initialize metric storage
-    metrics = utils.init_metric()
+    metrics = utils.init_metric(config.comp_angles)
 
 
     # Define optimizers
@@ -101,8 +105,9 @@ def run(config: DictConfig) -> None:
                 train_loader,
                 loss_func,
                 e,
-                loud_test=True,
-                loud_train=False,
+                loud_test=config.loud_test,
+                loud_train=config.loud_train,
+                comp_angles=config.comp_angles,
                 wandb=wandb,
                 num_classes=out_shape,
             )
@@ -114,8 +119,8 @@ def run(config: DictConfig) -> None:
             print("NaN detected, aborting training")
             break
 
-    torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/BP-MNIST-1e-6.pt")
-    np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
+    #torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/BP-MNIST-1e-6.pt")
+    #np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
 
     utils.plot_metrics(metrics)
     if config.wandb.use:

@@ -99,10 +99,10 @@ class WPLinear(torch.nn.Linear):
     def __str__(self):
         return "WPLinear"
 
+    @torch.inference_mode()
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # A clean and noisy input are both processed by a layer to produce
         if self.training:
-            with torch.inference_mode():
                 (output, weight_diff, bias_diff) = WPLinearFunc().apply(
                     input,
                     self.weight,

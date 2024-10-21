@@ -6,11 +6,15 @@ class PerturbNet(torch.nn.Module):
     def __init__(
         self,
         network: torch.nn.Module,
+        BP_network: torch.nn.Module = None
     ):
         super(PerturbNet, self).__init__()
         self.network = network
     
-    @torch.inference_mode
+        if (BP_network is not None):
+            self.BP_network = BP_network
+    
+    @torch.inference_mode()
     def forward(self, x):
         if self.training:
             x = torch.concatenate([x, x.clone()])
@@ -46,13 +50,16 @@ class PerturbNet(torch.nn.Module):
         num_params, normalizer = self.get_network_noise_normalizers(network)
         normalization = num_params / normalizer
         return normalization
-    
+ 
     def compare_BPangles(self, data, target, onehots, loss_func):
-        self.BP_update(data, target, onehots, loss_func)
-        BP_grads = self.get_grads()
+        assert self.BP_network is not None, "To compare against BP, an equivalent model using default torch layers must be provided"
 
-        self.train_step(data, target, onehots, loss_func)
-        WP_grads = self.get_grads()
+        #Get gradient estimates to compare
+        self.BP_update(data, target, onehots, loss_func)
+        BP_grads = self.get_grads(self.BP_network)
+
+        _ = self.train_step(data, target, onehots, loss_func)
+        WP_grads = self.get_grads(self.network)
 
         return torch.arccos(torch.clip(torch.dot(  WP_grads / torch.linalg.vector_norm(WP_grads), BP_grads / torch.linalg.vector_norm(BP_grads)), -1.0, 1.0))
 
@@ -61,10 +68,8 @@ class PerturbNet(torch.nn.Module):
         self.train()
 
         output = self(data)
-
         w1_loss = loss_func(output[: len(data)], target, onehots)  # sum up batch loss under first set of weights (can but do not have to be the clean weights)
         w2_loss = loss_func(output[len(data) :], target, onehots)  # sum up batch loss
-
         # Multiply grad by loss differential and normalize with unit norms
         loss_differential = w1_loss - w2_loss
         normalization = self.get_normalization(self.network)
@@ -84,20 +89,26 @@ class PerturbNet(torch.nn.Module):
         loss = loss.item()
         return loss, output
 
-    def get_grads(self):
+    def get_grads(self, network):
         grad_params = []
-        for param in self.network.parameters():
-            grad_params.append(param.grad.view(-1))
+        for child in network.children(): #iterates over layers of the network.
+            # are you a container?
+            if len(list(child.children())) > 0:
+                grad_params.append(self.get_grads(child).view(-1))
+            else:
+                if hasattr(child, "weight"):
+                    grad_params.append(child.weight.grad.view(-1))
+                if hasattr(child, "bias"):
+                    grad_params.append(child.bias.grad.view(-1))
         grad_params = torch.cat(grad_params)
-        return grad_params 
+        return grad_params
 
     def BP_update(self, data, target, onehots, loss_func):
-        self.eval() #https://pytorch.org/tutorials/beginner/former_torchies/autograd_tutorial.html
-        output = self.network(data).to(torch.float32)
-        target = target.to(torch.float32)
-        onehots = onehots.to(torch.float32)
-        loss = loss_func(output, target, onehots)
-        loss = loss.mean().to(torch.float32)
+        assert self.BP_network is not None
+
+        self.BP_network.load_state_dict(self.network.state_dict())
+        output = self.BP_network(data)
+        loss = loss_func(output, target, onehots).mean()
         loss.backward()
 
 class BPNet(torch.nn.Module):
