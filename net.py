@@ -51,14 +51,15 @@ class PerturbNet(torch.nn.Module):
         normalization = num_params / normalizer
         return normalization
  
-    def compare_BPangles(self, data, target, onehots, loss_func):
+    def compare_BPangles(self, data, target, onehots, loss_func, inp_length: int = 1):
         assert self.BP_network is not None, "To compare against BP, an equivalent model using default torch layers must be provided"
 
         #Get gradient estimates to compare
         self.BP_update(data, target, onehots, loss_func)
         BP_grads = self.get_grads(self.BP_network)
 
-        _ = self.train_step(data, target, onehots, loss_func)
+        for i in range(inp_length): #with more noise added, the 
+            _ = self.train_step(data, target, onehots, loss_func)
         WP_grads = self.get_grads(self.network)
 
         return torch.arccos(torch.clip(torch.dot(  WP_grads / torch.linalg.vector_norm(WP_grads), BP_grads / torch.linalg.vector_norm(BP_grads)), -1.0, 1.0))
