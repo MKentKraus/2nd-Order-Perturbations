@@ -374,7 +374,7 @@ def next_epoch(
     """
 
     test_results = test(
-        network, device, test_loader, epoch, loss_func, loud_test, num_classes=num_classes
+        network, device, test_loader, epoch, loss_func, num_classes=num_classes
         ) 
 
     metrics["test"]["loss"].append(test_results[0])
@@ -452,7 +452,7 @@ def train(
 
 @torch.no_grad()
 def test(
-    model, device, test_loader, epoch, loss_func, loud=True, num_classes=10,
+    model, device, test_loader, epoch, loss_func, loud=False, num_classes=10,
 ):
     """
     Computes loss of model on test set

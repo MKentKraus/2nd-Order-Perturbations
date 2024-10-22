@@ -91,8 +91,6 @@ def run(config) -> None:
         loss_obj = torch.nn.MSELoss(reduction="none")
         loss_func = lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
 
-    print("crash here?")
-
     for e in tqdm(range(config.nb_epochs)):
         metrics = utils.next_epoch(
                 network,

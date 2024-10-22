@@ -8,15 +8,13 @@ nb_epochs: 100
 loss_func: "mse" #CCE or MSE
 seed: 42
 device: "3"
-loud_test: False
-loud_train: True
+loud_test: True
+loud_train: False
 comp_angles: True
 num_perts: 3
 learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
 pert_type: "Cent" #Cent or Clean
 
-
-wandb:
-  project: MetaWP
-  entity: brai-lab
-  name: More-perts-angle-test
+project: MetaWP
+entity: brai-lab
+name: More-perts-angle-test
