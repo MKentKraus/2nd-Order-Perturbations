@@ -16,14 +16,13 @@ def run(config: DictConfig) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
     print(config)
 
-    if config.wandb.use:
-        wandb.init(
+    os.environ['WANDB_DISABLED'] = str(config.wandb.use)
+    wandb.init(
             config=cfg,
             entity=config.wandb.entity,
             project=config.wandb.project,
             name=config.wandb.name,
         )
-    
 
     # Initializing random seeding
     torch.manual_seed(config.seed)
@@ -109,6 +108,7 @@ def run(config: DictConfig) -> None:
                 loud_train=config.loud_train,
                 comp_angles=config.comp_angles,
                 wandb=wandb,
+                num_perts=config.num_perts
                 num_classes=out_shape,
             )
 
@@ -123,8 +123,7 @@ def run(config: DictConfig) -> None:
     #np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
 
     utils.plot_metrics(metrics)
-    if config.wandb.use:
-        wandb.finish()
+    wandb.finish()
 
 if __name__ == "__main__":
     run()
