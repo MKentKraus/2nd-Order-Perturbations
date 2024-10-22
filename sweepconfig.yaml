@@ -2,21 +2,22 @@ dataset: "MNIST"
 batch_size: 128
 optimizer_type: "sgd" #sgd or adam
 algorithm: "WP" #BP or WP
+
 sigma: 1e-3
 distribution: "normal"
 nb_epochs: 100
 loss_func: "mse" #CCE or MSE
 seed: 42
-device: "3"
+device: "6"
 loud_test: False
 loud_train: True
 comp_angles: True
-num_perts: 3
-learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
-pert_type: "Cent" #Cent or Clean
+experiment: default
 
 
-wandb:
-  project: MetaWP
-  entity: brai-lab
-  name: More-perts-angle-test
+learning_rate: 
+num_perts:
+pert_type:
+project: 
+entity: 
+name:
