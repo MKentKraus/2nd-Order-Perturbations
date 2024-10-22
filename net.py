@@ -58,11 +58,14 @@ class PerturbNet(torch.nn.Module):
         self.BP_update(data, target, onehots, loss_func)
         BP_grads = self.get_grads(self.BP_network)
 
-        for i in range(inp_length): #with more noise added, the 
+        for i in range(inp_length): #with more noise added, the angles should be closer together
             _ = self.train_step(data, target, onehots, loss_func)
         WP_grads = self.get_grads(self.network)
 
-        return torch.arccos(torch.clip(torch.dot(  WP_grads / torch.linalg.vector_norm(WP_grads), BP_grads / torch.linalg.vector_norm(BP_grads)), -1.0, 1.0))
+        #compute the angle between the two vectors by using the dot product
+        WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
+        BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
+        return torch.acos(torch.dot(WP_grads, BP_grads))
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
