@@ -28,7 +28,7 @@ class WPLinearFunc(torch.autograd.Function):
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
         else:
             w_noise_1 = dist_sampler(noise_shape)
-            output[:half_batch_width] += add_noise(input[:half_batch_width], w_noise_1, sample_wise)
+            output[:half_batch_width] += WPLinearFunc.add_noise(input[:half_batch_width], w_noise_1, sample_wise)
 
         ###Perturb copy of data
         if pert_type.lower() == "cent":
@@ -38,7 +38,7 @@ class WPLinearFunc(torch.autograd.Function):
 
 
         weight_diff = torch.sub(w_noise_1, w_noise_2)
-        output[half_batch_width:] += add_noise(input[half_batch_width:], w_noise_2, sample_wise)
+        output[half_batch_width:] += WPLinearFunc.add_noise(input[half_batch_width:], w_noise_2, sample_wise)
 
 
 
@@ -46,18 +46,16 @@ class WPLinearFunc(torch.autograd.Function):
         b_noise_1, b_noise_2 = None, None
         bias_diff = None
         if biases is not None:
-
             noise_shape = [noise_dim] + list(biases.shape)
-
             #Samples noise to add to biases. Second half is always perturbed
             if pert_type.lower() == "clean":
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
-                b_noise_2 = dist_sampler(noise_shape)
-            elif pert_type.lower() == "cent":                   
-                b_noise_1 = dist_sampler(noise_shape) 
+            else:
+                b_noise_1 = dist_sampler(noise_shape)
+
+            if pert_type.lower() == "cent":                   
                 b_noise_2 = torch.mul(b_noise_1, -1)
             else:
-                b_noise_1 = dist_sampler(noise_shape) 
                 b_noise_2 = dist_sampler(noise_shape)
 
             bias_diff = torch.sub(b_noise_1, b_noise_2)
@@ -68,12 +66,18 @@ class WPLinearFunc(torch.autograd.Function):
         return output, weight_diff, bias_diff
 
 
-
+    @staticmethod
+    def add_noise(weights: torch.Tensor, noise: torch.Tensor, sample_wise: bool):
+            """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
+            if sample_wise:
+                out = torch.einsum("ni,nki->nk", weights, noise)
+            else:
+                out = torch.einsum("ni,ki->nk", weights, noise)
+            return out
+    
     @staticmethod
     def backward(ctx, grad_output):
         return None, None, None, None, None
-    #https://pytorch.org/docs/stable/notes/extending.html
-    #https://discuss.pytorch.org/t/autograd-output-in-a-simple-custom-linear-layer/47274
 
 
 class WPLinear(torch.nn.Linear):
@@ -150,11 +154,4 @@ class WPLinear(torch.nn.Linear):
     def get_number_perturbed_params(self):
         return self.weight.numel() + (self.bias.numel() if self.bias is not None else 0)
 
-@staticmethod
-def add_noise(weights: torch.Tensor, noise: torch.Tensor, sample_wise: bool):
-        """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
-        if sample_wise:
-            out = torch.einsum("ni,nki->nk", weights, noise)
-        else:
-            out = torch.einsum("ni,ki->nk", weights, noise)
-        return out
+
