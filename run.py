@@ -108,7 +108,7 @@ def run(config: DictConfig) -> None:
                 loud_train=config.loud_train,
                 comp_angles=config.comp_angles,
                 wandb=wandb,
-                num_perts=config.num_perts
+                num_perts=config.num_perts,
                 num_classes=out_shape,
             )
 
