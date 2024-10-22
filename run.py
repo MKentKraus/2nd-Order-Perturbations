@@ -11,17 +11,16 @@ from wp import WPLinear
 from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
-@hydra.main(version_base="1.3", config_path="", config_name="config")
-def run(config: DictConfig) -> None:
-    cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
-    print(config)
 
-    os.environ['WANDB_DISABLED'] = str(config.wandb.use)
+@hydra.main(version_base="1.3", config_path="", config_name="scpfig")
+def run(config) -> None:
+    cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
+
     wandb.init(
             config=cfg,
-            entity=config.wandb.entity,
-            project=config.wandb.project,
-            name=config.wandb.name,
+            entity=config.entity,
+            project=config.project,
+            name=config.name,
         )
 
     # Initializing random seeding
@@ -92,7 +91,7 @@ def run(config: DictConfig) -> None:
         loss_obj = torch.nn.MSELoss(reduction="none")
         loss_func = lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
 
-
+    print("crash here?")
 
     for e in tqdm(range(config.nb_epochs)):
         metrics = utils.next_epoch(
@@ -122,7 +121,6 @@ def run(config: DictConfig) -> None:
     #torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/BP-MNIST-1e-6.pt")
     #np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
 
-    utils.plot_metrics(metrics)
     wandb.finish()
 
 if __name__ == "__main__":

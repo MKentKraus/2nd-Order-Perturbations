@@ -1,0 +1,26 @@
+program: run.py
+project: MetaWP
+entity: brai-lab
+name: CFD/FFD comp
+
+
+method: grid
+
+metric:
+  goal: minimize
+  name: train/loss
+parameters:
+  learning_rate:
+      values: [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+  pert_type:
+      values: ["Clean", "Cent"]
+  num_perts:
+      values: [1,2,3,4,5]
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
+
+
