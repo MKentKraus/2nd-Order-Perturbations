@@ -61,10 +61,10 @@ class PerturbNet(torch.nn.Module):
         for i in range(inp_length): #with more noise added, the angles should be closer together
             _ = self.train_step(data, target, onehots, loss_func)
         WP_grads = self.get_grads(self.network)
-
-        #compute the angle between the two vectors by using the dot product
+        
+        #compute the angle between the two vectors by using the dot produ ct
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
-        BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
+        BP_grads = BP_grads / torch.linalg.vector_norm(BP_grads)
         return torch.acos(torch.dot(WP_grads, BP_grads))
 
     @torch.inference_mode()
@@ -75,9 +75,9 @@ class PerturbNet(torch.nn.Module):
         w1_loss = loss_func(output[: len(data)], target, onehots)  # sum up batch loss under first set of weights (can but do not have to be the clean weights)
         w2_loss = loss_func(output[len(data) :], target, onehots)  # sum up batch loss
         # Multiply grad by loss differential and normalize with unit norms
-        loss_differential = w1_loss - w2_loss
+        loss_differential = w2_loss - w1_loss
         normalization = self.get_normalization(self.network)
-        grad_scaling = loss_differential * normalization #normalizes the loss
+        grad_scaling = torch.div(loss_differential,normalization) #normalizes the loss
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling) #updates the gradient of the params
 
