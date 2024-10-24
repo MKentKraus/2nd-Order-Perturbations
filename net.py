@@ -52,6 +52,7 @@ class PerturbNet(torch.nn.Module):
         return normalization
  
     def compare_BPangles(self, data, target, onehots, loss_func, inp_length: int = 1):
+        """Compare angles of a weight perturbation update to a backpropagation update. If input lenght is more than 1, multiple perturbations will be applieds"""
         assert self.BP_network is not None, "To compare against BP, an equivalent model using default torch layers must be provided"
 
         #Get gradient estimates to compare
@@ -64,7 +65,7 @@ class PerturbNet(torch.nn.Module):
         
         #compute the angle between the two vectors by using the dot produ ct
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
-        BP_grads = BP_grads / torch.linalg.vector_norm(BP_grads)
+        BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
         return torch.acos(torch.dot(WP_grads, BP_grads))
 
     @torch.inference_mode()
@@ -77,7 +78,7 @@ class PerturbNet(torch.nn.Module):
         # Multiply grad by loss differential and normalize with unit norms
         loss_differential = w2_loss - w1_loss
         normalization = self.get_normalization(self.network)
-        grad_scaling = torch.div(loss_differential,normalization) #normalizes the loss
+        grad_scaling = loss_differential * normalization #normalizes the loss
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling) #updates the gradient of the params
 
@@ -108,6 +109,7 @@ class PerturbNet(torch.nn.Module):
         return grad_params
 
     def BP_update(self, data, target, onehots, loss_func):
+        """Calculates the gradient using backpropagation for the current inputs and targets"""
         assert self.BP_network is not None
 
         self.BP_network.load_state_dict(self.network.state_dict())

@@ -404,7 +404,7 @@ def next_epoch(
         wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1]}, step=epoch)
     return metrics
 
-
+@torch.inference_mode()
 def train(
     model,
     device,
@@ -493,7 +493,7 @@ def test_angles(
     model, device, test_loader, epoch, loss_func, num_perts, loud=True, num_classes=10,
 ):
     """
-    Computes loss of model on test set
+    Computes loss of model on test set, and computes the angle between the gradients derived by perturbation and backpropagation
     Parameters
     ----------
     loud : bool 
