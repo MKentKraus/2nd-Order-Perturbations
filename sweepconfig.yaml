@@ -3,14 +3,13 @@ batch_size: 128
 optimizer_type: "sgd" #sgd or adam
 algorithm: "WP" #BP or WP
 
-sigma: 1e-3
 distribution: "normal"
-nb_epochs: 100
+nb_epochs: 50
 loss_func: "mse" #CCE or MSE
 seed: 42
-device: "6"
-loud_test: False
-loud_train: True
+device: "4"
+loud_test: True
+loud_train: False
 comp_angles: True
 experiment: default
 
@@ -18,7 +17,7 @@ experiment: default
 learning_rate: 
 num_perts:
 pert_type:
-
+sigma:
 project: 
 entity: 
 name:

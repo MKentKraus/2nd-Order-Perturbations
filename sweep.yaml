@@ -1,22 +1,20 @@
-program: run.py
+program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name: CFD/FFD comp
-
-
+name: CFD/FFD - large perts, sigma test
 method: grid
-
 metric:
-  goal: minimize
-  name: train/loss
+  goal: maximize
+  name: test/acc
 parameters:
   learning_rate:
-      values: [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+      values: [1e-5, 1e-6, 1e-7, 1e-8]
   pert_type:
       values: ["Clean", "Cent"]
   num_perts:
-      values: [1,2,3,4,5]
-
+      values: [1, 4, 16, 64, 128, 256]
+  sigma:
+      values: [1e-2, 1e-3, 1e-4]
 command:
   - ${env}
   - python
