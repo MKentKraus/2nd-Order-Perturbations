@@ -12,7 +12,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="", config_name="config")
+@hydra.main(version_base="1.3", config_path="config/", config_name="config")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
@@ -21,15 +21,16 @@ def run(config) -> None:
             entity=config.entity,
             project=config.project,
             name=config.name,
+            mode=config.mode,
         )
-
+    print(cfg)
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
     random.seed(config.seed)
-    print(f'Setting CUDA visible devices to [{config.device}]')
-    os.environ['CUDA_VISIBLE_DEVICES'] = f'{config.device}'
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # print(f'Setting CUDA visible devices to [{config.device}]')
+    # # os.environ['CUDA_VISIBLE_DEVICES'] = f'{config.device}'
+    device = torch.device(config.device)
 
     # Load dataset
     train_loader, test_loader, in_shape, out_shape = utils.construct_dataloaders(
@@ -48,7 +49,7 @@ def run(config) -> None:
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             WPLinear(in_shape, out_shape, config.pert_type,
-                     dist_sampler=dist_sampler, sample_wise=False),
+                     dist_sampler=dist_sampler, sample_wise=False, batch_size=config.batch_size),
         ).to(device)
 
         model_bp = torch.nn.Sequential(
