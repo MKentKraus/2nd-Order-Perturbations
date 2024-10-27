@@ -111,7 +111,7 @@ class WPLinear(torch.nn.Linear):
         pert_type: str = "forw",
         dist_sampler: torch.distributions.Distribution = None,
         sample_wise: bool = False,
-        batch_size: int,
+        num_perts: int = 1,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -119,10 +119,10 @@ class WPLinear(torch.nn.Linear):
         self.pert_type = pert_type
         self.dist_sampler = dist_sampler
         self.sample_wise = sample_wise
-        self.batch_size = batch_size
         self.square_norm = None
         self.weight_diff = None
         self.bias_diff = None
+        self.num_perts = num_perts*2
 
     def __str__(self):
         return "WPLinear"
@@ -131,6 +131,7 @@ class WPLinear(torch.nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # A clean and noisy input are both processed by a layer to produce
         if self.training:
+                batch_size = input.shape[0] // self.num_perts
                 (output, weight_diff, bias_diff) = WPLinearFunc().apply(
                     input,
                     self.weight,
@@ -138,13 +139,13 @@ class WPLinear(torch.nn.Linear):
                     self.pert_type,
                     self.dist_sampler,
                     self.sample_wise,
-                    self.batch_size,
+                    batch_size,
                 )
 
 
                 self.weight_diff = weight_diff
                 self.bias_diff = bias_diff
-                noise_dim = self.batch_size//2 if self.sample_wise else 1
+                noise_dim = batch_size//2 if self.sample_wise else 1
                 
                 self.square_norm = torch.sum( #check properly if this works with more perturbations and sample wise noise additions
                         (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1

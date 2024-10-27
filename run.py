@@ -12,7 +12,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="config/", config_name="config")
+@hydra.main(version_base="1.3", config_path="config/", config_name="sweepconfig")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
@@ -49,7 +49,7 @@ def run(config) -> None:
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             WPLinear(in_shape, out_shape, config.algorithm,
-                     dist_sampler=dist_sampler, sample_wise=False, batch_size=config.batch_size),
+                     dist_sampler=dist_sampler, sample_wise=False, num_perts=config.num_perts),
         ).to(device)
 
         model_bp = torch.nn.Sequential(
