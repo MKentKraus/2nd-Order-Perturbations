@@ -165,14 +165,25 @@ class WPLinear(torch.nn.Linear):
     def update_grads(self, scaling_factor):
         # Rescale grad data - to be used at end of gradient pass
 
-        scaled_weight_diff = scaling_factor[:, None, None] * self.weight_diff[0] 
-        self.weight.grad = torch.sum(scaled_weight_diff, axis=0)
-        self.weight_diff = self.weight_diff[1:] 
+        if(self.weight_diff.ndim > 2):
+            weight_diff = self.weight_diff[0]
+            self.weight_diff = self.weight_diff[1:]
 
+        else:
+            weight_diff = self.weight_diff
+
+        scaled_weight_diff = scaling_factor[:, None, None] * weight_diff
+        self.weight.grad = torch.sum(scaled_weight_diff, axis=0)
+        
         if self.bias is not None:
-            scaled_bias_diff = scaling_factor[:, None] * self.bias_diff[0]
+            if(self.weight_diff.ndim > 2):
+                bias_diff = self.bias_diff[0]
+                self.bias_diff = self.bias_diff[1:]
+
+            else:
+                bias_diff = self.bias_diff
+            scaled_bias_diff = scaling_factor[:, None] * bias_diff
             self.bias.grad = torch.sum(scaled_bias_diff, axis=0)
-            self.bias_diff = self.bias_diff[1:]
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

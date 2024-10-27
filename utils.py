@@ -405,7 +405,6 @@ def next_epoch(
         wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1]}, step=epoch)
     return metrics
 
-@torch.inference_mode()
 def train(
     model,
     device,
