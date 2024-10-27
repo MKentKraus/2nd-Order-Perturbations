@@ -353,7 +353,6 @@ def next_epoch(
     loud_train=False,
     comp_angles=False,
     wandb=None,
-    num_perts=1,
     num_classes=10,
 ):
     """Trains and tests the network for one epoch. 
@@ -382,7 +381,7 @@ def next_epoch(
 
     if comp_angles:
         train_results = test_angles(
-            network, device, train_loader, epoch, loss_func, num_perts, loud_test, num_classes=num_classes
+            network, device, train_loader, epoch, loss_func, loud_test, num_classes=num_classes
         )
     else:
         train_results = test( #only compare angles on train dataset
@@ -490,7 +489,7 @@ def test(
 
 
 def test_angles(
-    model, device, test_loader, epoch, loss_func, num_perts, loud=True, num_classes=10,
+    model, device, test_loader, epoch, loss_func, loud=True, num_classes=10,
 ):
     """
     Computes loss of model on test set, and computes the angle between the gradients derived by perturbation and backpropagation
@@ -508,7 +507,7 @@ def test_angles(
 
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
-        angle += model.compare_BPangles(data, target, onehots, loss_func, num_perts)
+        angle += model.compare_BPangles(data, target, onehots, loss_func)
         loss, output = model.test_step(data, target, onehots, loss_func)
         test_loss += loss
         pred = output.argmax(dim=1, keepdim=True)

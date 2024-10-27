@@ -9,10 +9,14 @@ class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weights"""
 
     @staticmethod
-    def forward(ctx, input, weights, biases, pert_type, dist_sampler, sample_wise):
+    def forward(ctx, input, weights, biases, pert_type, dist_sampler, sample_wise, batch_size):
         # Matrix multiplying both the clean and noisy forward signals
+
+        #recursion - save outputs, since none is apriori better than the other, and the loss should be computed on all of them
+        input = input[:batch_size*2]
+
         output = torch.mm(input, weights.t())
-        half_batch_width = len(input) // 2
+        half_batch_width = batch_size // 2
 
         noise_dim = half_batch_width if sample_wise else 1 #Whether the noise is unique or shared for each element of the batch, determined by sample_wise
 
@@ -24,7 +28,7 @@ class WPLinearFunc(torch.autograd.Function):
 
 
         ###Perturb original data
-        if pert_type.lower() == "clean":
+        if pert_type.lower() == "forw":
             w_noise_1 = torch.zeros(noise_shape, device=input.device)
         else:
             w_noise_1 = dist_sampler(noise_shape)
@@ -48,7 +52,7 @@ class WPLinearFunc(torch.autograd.Function):
         if biases is not None:
             noise_shape = [noise_dim] + list(biases.shape)
             #Samples noise to add to biases. Second half is always perturbed
-            if pert_type.lower() == "clean":
+            if pert_type.lower() == "forw":
                 b_noise_1 = torch.zeros(noise_shape, device=input.device)
             else:
                 b_noise_1 = dist_sampler(noise_shape)
@@ -86,9 +90,10 @@ class WPLinear(torch.nn.Linear):
     def __init__(
         self,
         *args,
-        pert_type: str = "Clean",
+        pert_type: str = "forw",
         dist_sampler: torch.distributions.Distribution = None,
         sample_wise: bool = False,
+        batch_size: int,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -96,6 +101,7 @@ class WPLinear(torch.nn.Linear):
         self.pert_type = pert_type
         self.dist_sampler = dist_sampler
         self.sample_wise = sample_wise
+        self.batch_size = batch_size
         self.square_norm = None
         self.weight_diff = None
         self.bias_diff = None
@@ -114,13 +120,13 @@ class WPLinear(torch.nn.Linear):
                     self.pert_type,
                     self.dist_sampler,
                     self.sample_wise,
+                    self.batch_size,
                 )
 
-                half_batch_width = len(input) // 2
 
                 self.weight_diff = weight_diff
                 self.bias_diff = bias_diff
-                noise_dim = half_batch_width if self.sample_wise else 1
+                noise_dim = self.batch_size//2 if self.sample_wise else 1
 
                 self.square_norm = torch.sum(
                     (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1

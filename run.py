@@ -57,7 +57,7 @@ def run(config) -> None:
             torch.nn.Linear(in_shape, out_shape),
         ).to(device)
 
-        network = PerturbNet(model, model_bp)
+        network = PerturbNet(model, config.num_perts, model_bp)
 
     elif config.algorithm.lower() == "bp":
 
@@ -106,7 +106,6 @@ def run(config) -> None:
                 loud_train=config.loud_train,
                 comp_angles=config.comp_angles,
                 wandb=wandb,
-                num_perts=config.num_perts,
                 num_classes=out_shape,
             )
 

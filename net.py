@@ -1,23 +1,33 @@
 """Neural Network definition"""
 
 import torch
+import numpy as np
 
 class PerturbNet(torch.nn.Module):
     def __init__(
         self,
         network: torch.nn.Module,
+        num_perts: int = 1,
         BP_network: torch.nn.Module = None
     ):
         super(PerturbNet, self).__init__()
         self.network = network
-    
+        self.old_wp_loss = None
+        self.old_bp_loss = None
+        self.num_perts = num_perts
+
         if (BP_network is not None):
             self.BP_network = BP_network
-    
+            pytorch_total_params = sum(p.numel() for p in BP_network.parameters() if p.requires_grad) #should get the total number of trainable parameters           
+            self.comp_params = np.random.permutation(pytorch_total_params)[:100] #randomly selects a thousand random parameters to compare the angle on.    
+
     @torch.inference_mode()
     def forward(self, x):
         if self.training:
-            x = torch.concatenate([x, x.clone()])
+            dim = torch.ones(x.dim(), dtype=torch.int8).tolist() #repeat requires a list/tuple of ints with all dimensions of the tensor
+            dim[0] += self.num_perts
+            x = x.repeat(dim) 
+            
         return self.network(x)
 
 
@@ -51,32 +61,47 @@ class PerturbNet(torch.nn.Module):
         normalization = num_params / normalizer
         return normalization
  
-    def compare_BPangles(self, data, target, onehots, loss_func, inp_length: int = 1):
+    def compare_BPangles(self, data, target, onehots, loss_func):
         """Compare angles of a weight perturbation update to a backpropagation update. If input lenght is more than 1, multiple perturbations will be applieds"""
         assert self.BP_network is not None, "To compare against BP, an equivalent model using default torch layers must be provided"
 
-        #Get gradient estimates to compare
-        self.BP_update(data, target, onehots, loss_func)
-        BP_grads = self.get_grads(self.BP_network)
+        self.BP_network.load_state_dict(self.network.state_dict())
 
-        for i in range(inp_length): #with more noise added, the angles should be closer together
-            _ = self.train_step(data, target, onehots, loss_func)
-        WP_grads = self.get_grads(self.network)
-        
+        bp_loss = self.BP_update(data, target, onehots, loss_func)
+        BP_grads = self.get_grads(self.BP_network)[self.comp_params] #gets all the gradients, then selects the ones for comparison
+
+
+        wp_loss = self.train_step(data, target, onehots, loss_func)
+
+        WP_grads = self.get_grads(self.network)[self.comp_params]
         #compute the angle between the two vectors by using the dot produ ct
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
         BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
+
+        #comparing the imporvemetns in loss of wp and bp
+        if self.old_wp_loss is not None:
+            wp_loss_diff = wp_loss - self.old_wp_loss
+            bp_loss_dif = bp_loss - self.old_bp_loss
+            one_step_eff = wp_loss_diff/bp_loss_dif #check if this is the way to do it
+            print(type(wp_loss))
+            print(one_step_eff)    
+        self.old_wp_loss = wp_loss
+        self.old_bp_loss = bp_loss
+
+
+
+        #compare loss to previous loss 
         return torch.acos(torch.dot(WP_grads, BP_grads))
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
         self.train()
-
+        #mean over losses from different perturbations
         output = self(data)
         w1_loss = loss_func(output[: len(data)], target, onehots)  # sum up batch loss under first set of weights (can but do not have to be the clean weights)
         w2_loss = loss_func(output[len(data) :], target, onehots)  # sum up batch loss
         # Multiply grad by loss differential and normalize with unit norms
-        loss_differential = w2_loss - w1_loss
+        loss_differential = w1_loss - w2_loss
         normalization = self.get_normalization(self.network)
         grad_scaling = loss_differential * normalization #normalizes the loss
 
@@ -112,10 +137,10 @@ class PerturbNet(torch.nn.Module):
         """Calculates the gradient using backpropagation for the current inputs and targets"""
         assert self.BP_network is not None
 
-        self.BP_network.load_state_dict(self.network.state_dict())
         output = self.BP_network(data)
         loss = loss_func(output, target, onehots).mean()
         loss.backward()
+        return loss.item()
 
 class BPNet(torch.nn.Module):
     def __init__(
