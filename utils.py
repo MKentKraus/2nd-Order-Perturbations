@@ -394,7 +394,7 @@ def next_epoch(
         metrics["angle"].append(train_results[2])        
 
     _, _ = train(
-                    network, device, train_loader, optimizer ,epoch, loss_func, loud=loud_train, num_classes=num_classes
+                    network, device, train_loader, optimizer, epoch, loss_func, loud=loud_train, num_classes=num_classes
                 )
 
     if wandb is not None and comp_angles:

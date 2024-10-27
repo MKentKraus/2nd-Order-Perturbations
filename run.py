@@ -40,7 +40,7 @@ def run(config) -> None:
 
     #Define network
     network = None
-    if config.algorithm.lower() == "wp":
+    if config.algorithm.lower() == "forw" or config.algorithm.lower() == "cent":
         dist_sampler = utils.make_dist_sampler(
             config.sigma,
             config.distribution,
@@ -48,7 +48,7 @@ def run(config) -> None:
         
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, config.pert_type,
+            WPLinear(in_shape, out_shape, config.algorithm,
                      dist_sampler=dist_sampler, sample_wise=False, batch_size=config.batch_size),
         ).to(device)
 
@@ -60,6 +60,7 @@ def run(config) -> None:
         network = PerturbNet(model, config.num_perts, model_bp)
 
     elif config.algorithm.lower() == "bp":
+        config.comp_angles = False #BP networks do not need to compare angles with BP updates
 
         model = torch.nn.Sequential(
             torch.nn.Flatten(),

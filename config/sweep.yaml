@@ -9,8 +9,8 @@ metric:
 parameters:
   learning_rate:
       values: [1e-5, 1e-6, 1e-7]
-  pert_type:
-      values: ["Clean", "Cent"]
+  algorithm:
+      values: ["Forw", "Cent", "BP"]
   num_perts:
       values: [1,8,64,512]
   sigma:

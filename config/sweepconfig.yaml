@@ -1,7 +1,6 @@
 dataset: "MNIST"
 batch_size: 128
 optimizer_type: "sgd" #sgd or adam
-algorithm: "WP" #BP or WP
 
 distribution: "normal"
 nb_epochs: 50
@@ -16,7 +15,7 @@ experiment: default
 
 learning_rate: 
 num_perts:
-pert_type:
+algorithm:
 sigma:
 project: 
 entity: 

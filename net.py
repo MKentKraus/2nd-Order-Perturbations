@@ -26,7 +26,7 @@ class PerturbNet(torch.nn.Module):
         if self.training:
             dim = torch.ones(x.dim(), dtype=torch.int8).tolist() #repeat requires a list/tuple of ints with all dimensions of the tensor
             dim[0] += self.num_perts
-            x = x.repeat(dim) 
+            x = x.repeat(dim)
             
         return self.network(x)
 
@@ -64,7 +64,6 @@ class PerturbNet(torch.nn.Module):
     def compare_BPangles(self, data, target, onehots, loss_func):
         """Compare angles of a weight perturbation update to a backpropagation update. If input lenght is more than 1, multiple perturbations will be applieds"""
         assert self.BP_network is not None, "To compare against BP, an equivalent model using default torch layers must be provided"
-
         self.BP_network.load_state_dict(self.network.state_dict())
 
         bp_loss = self.BP_update(data, target, onehots, loss_func)
@@ -80,11 +79,11 @@ class PerturbNet(torch.nn.Module):
 
         #comparing the imporvemetns in loss of wp and bp
         if self.old_wp_loss is not None:
-            wp_loss_diff = wp_loss - self.old_wp_loss
+            wp_loss_diff = wp_loss - self.old_wp_loss #negative if loss decreased, positive if increased
             bp_loss_dif = bp_loss - self.old_bp_loss
-            one_step_eff = wp_loss_diff/bp_loss_dif #check if this is the way to do it
-            print(type(wp_loss))
-            print(one_step_eff)    
+            one_step_eff = wp_loss_diff/bp_loss_dif #numbers over 1 mean that wp has improved loss more than bp.
+        else:
+            one_step_eff = 1   
         self.old_wp_loss = wp_loss
         self.old_bp_loss = bp_loss
 
