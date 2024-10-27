@@ -11,7 +11,7 @@ device: "cuda:0"
 loud_test: True
 loud_train: False
 comp_angles: True
-num_perts: 1
+num_perts: 3
 learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
 
 project: MetaWP

@@ -546,7 +546,7 @@ def init_metric(comp_angles=False):
     Dictionary of Dictionaries. 
     """
     if comp_angles:
-        return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}, "angle" : []}
+        return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}, "angle" : [], "one step effectivness": []}
     return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
 
 

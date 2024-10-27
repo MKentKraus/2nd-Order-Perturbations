@@ -25,7 +25,7 @@ class PerturbNet(torch.nn.Module):
     def forward(self, x):
         if self.training:
             dim = torch.ones(x.dim(), dtype=torch.int8).tolist() #repeat requires a list/tuple of ints with all dimensions of the tensor
-            dim[0] += self.num_perts
+            dim[0] = self.num_perts * 2 
             x = x.repeat(dim)
             
         return self.network(x)
@@ -92,22 +92,35 @@ class PerturbNet(torch.nn.Module):
         #compare loss to previous loss 
         return torch.acos(torch.dot(WP_grads, BP_grads))
 
+
+
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
         self.train()
         #mean over losses from different perturbations
         output = self(data)
-        w1_loss = loss_func(output[: len(data)], target, onehots)  # sum up batch loss under first set of weights (can but do not have to be the clean weights)
-        w2_loss = loss_func(output[len(data) :], target, onehots)  # sum up batch loss
+        batch_size = data.shape[0]
+        return np.mean(self.calc_losses(output, target, onehots, loss_func, batch_size))
+    
+    @torch.inference_mode()
+    def calc_losses(self, output, target, onehots, loss_func, batch_size):
+        other_losses = None
+        if output.shape[0] > batch_size*2:
+            other_losses = self.calc_losses(output[batch_size*2:], target, onehots, loss_func, batch_size)
+
+        output = output[:batch_size*2]     
+        w1_loss = loss_func(output[: batch_size], target, onehots)  # sum up batch loss under first set of weights (can but do not have to be the clean weights)
+        w2_loss = loss_func(output[batch_size :], target, onehots)  # sum up batch loss
         # Multiply grad by loss differential and normalize with unit norms
         loss_differential = w1_loss - w2_loss
         normalization = self.get_normalization(self.network)
         grad_scaling = loss_differential * normalization #normalizes the loss
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling) #updates the gradient of the params
-
-        return w1_loss.mean().item()
-
+        if other_losses is not None:
+            return np.append(other_losses, w1_loss.mean().item())
+        else:
+            return np.array(w1_loss.mean().item())
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
         self.eval()
