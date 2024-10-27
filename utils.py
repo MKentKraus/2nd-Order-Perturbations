@@ -391,14 +391,16 @@ def next_epoch(
     metrics["train"]["loss"].append(train_results[0])
     metrics["train"]["acc"].append(train_results[1])
     if comp_angles:
-        metrics["angle"].append(train_results[2])        
+        metrics["angle"].append(train_results[2])   
+        metrics["one step effectiveness"].append(train_results[3]) 
+
 
     _, _ = train(
                     network, device, train_loader, optimizer, epoch, loss_func, loud=loud_train, num_classes=num_classes
                 )
 
     if wandb is not None and comp_angles:
-        wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1], "angle difference": train_results[2]}, step=epoch)
+        wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1], "angle difference": train_results[2], "one step effectiveness":train_results[3]}, step=epoch)
     else:
         wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1]}, step=epoch)
     return metrics
@@ -503,11 +505,14 @@ def test_angles(
     test_loss = 0
     correct = 0
     angle = 0
+    one_step_effct = 0
     for data, target in test_loader:
 
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
-        angle += model.compare_BPangles(data, target, onehots, loss_func)
+        angl, ose = model.compare_BPangles(data, target, onehots, loss_func)
+        angle +=angl
+        one_step_effct += ose
         loss, output = model.test_step(data, target, onehots, loss_func)
         test_loss += loss
         pred = output.argmax(dim=1, keepdim=True)
@@ -516,19 +521,20 @@ def test_angles(
 
     angle /= len(test_loader)
     test_loss /= len(test_loader)
-
+    one_step_effct /= len(test_loader)
     if loud:
         print(
-            "\n Test Epoch {}: Angle: {} Loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+            "\n Test Epoch {}: Angle: {}, OSE: {}, Loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
                 epoch,
                 angle,
+                one_step_effct,
                 test_loss,
                 correct,
                 len(test_loader.dataset),
                 100.0 * correct / len(test_loader.dataset),
             )
         )
-    return test_loss, (100.0 * correct / len(test_loader.dataset)), angle
+    return test_loss, (100.0 * correct / len(test_loader.dataset)), angle, one_step_effct
 
 
 
@@ -546,7 +552,7 @@ def init_metric(comp_angles=False):
     Dictionary of Dictionaries. 
     """
     if comp_angles:
-        return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}, "angle" : [], "one step effectivness": []}
+        return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}, "angle" : [], "one step effectiveness": []}
     return {"train": {"loss": [], "acc": []}, "test": {"loss": [], "acc": []}}
 
 

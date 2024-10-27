@@ -90,7 +90,7 @@ class PerturbNet(torch.nn.Module):
 
 
         #compare loss to previous loss 
-        return torch.acos(torch.dot(WP_grads, BP_grads))
+        return torch.acos(torch.dot(WP_grads, BP_grads)), one_step_eff
 
 
 
