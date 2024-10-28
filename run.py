@@ -48,7 +48,7 @@ def run(config) -> None:
         
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, config.algorithm,
+            WPLinear(in_shape, out_shape, pert_type=config.algorithm,
                      dist_sampler=dist_sampler, sample_wise=False, num_perts=config.num_perts),
         ).to(device)
 
