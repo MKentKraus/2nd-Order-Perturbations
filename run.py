@@ -12,7 +12,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="config/", config_name="sweepconfig")
+@hydra.main(version_base="1.3", config_path="config/", config_name="config")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
@@ -57,7 +57,7 @@ def run(config) -> None:
             torch.nn.Linear(in_shape, out_shape),
         ).to(device)
 
-        network = PerturbNet(model, config.num_perts, model_bp)
+        network = PerturbNet(model, config.num_perts, config.algorithm, model_bp)
 
     elif config.algorithm.lower() == "bp":
         config.comp_angles = False #BP networks do not need to compare angles with BP updates
