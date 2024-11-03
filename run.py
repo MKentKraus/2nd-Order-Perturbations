@@ -28,8 +28,7 @@ def run(config) -> None:
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
     random.seed(config.seed)
-    # print(f'Setting CUDA visible devices to [{config.device}]')
-    # # os.environ['CUDA_VISIBLE_DEVICES'] = f'{config.device}'
+
     device = torch.device(config.device)
 
     # Load dataset
@@ -48,13 +47,13 @@ def run(config) -> None:
         
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            WPLinear(in_shape, out_shape, pert_type=config.algorithm,
+            WPLinear(in_shape, out_shape, bias=config.bias, pert_type=config.algorithm,
                      dist_sampler=dist_sampler, sample_wise=False, num_perts=config.num_perts),
         ).to(device)
 
         model_bp = torch.nn.Sequential(
             torch.nn.Flatten(),
-            torch.nn.Linear(in_shape, out_shape),
+            torch.nn.Linear(in_shape, out_shape, bias=config.bias),
         ).to(device)
 
         network = PerturbNet(model, config.num_perts, config.algorithm, model_bp)

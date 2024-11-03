@@ -13,8 +13,6 @@ class PerturbNet(torch.nn.Module):
     ):
         super(PerturbNet, self).__init__()
         self.network = network
-        self.old_wp_loss = None
-        self.old_bp_loss = None
         self.pert_type = pert_type
         self.num_perts = num_perts
 
@@ -29,7 +27,7 @@ class PerturbNet(torch.nn.Module):
         if self.training:
             dim = torch.ones(x.dim(), dtype=torch.int8).tolist() #repeat requires a list/tuple of ints with all dimensions of the tensor
             if self.pert_type.lower() == "forw":
-                dim[0] = self.num_perts + 1 
+                dim[0] = self.num_perts + 1
             elif self.pert_type.lower() == "cent":
                 dim[0] = self.num_perts * 2
             x = x.repeat(dim)
@@ -83,20 +81,9 @@ class PerturbNet(torch.nn.Module):
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
         BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
 
-        #comparing the improvements in loss of wp and bp
-        if self.old_wp_loss is not None:
-            wp_loss_diff = wp_loss - self.old_wp_loss #negative if loss decreased, positive if increased
-            bp_loss_dif = bp_loss - self.old_bp_loss
-            one_step_eff = wp_loss_diff/bp_loss_dif #numbers over 1 mean that wp has improved loss more than bp.
-        else:
-            one_step_eff = 1   
-        self.old_wp_loss = wp_loss
-        self.old_bp_loss = bp_loss
 
-
-
-        #compare loss to previous loss 
-        return torch.acos(torch.dot(WP_grads, BP_grads)), one_step_eff
+        #compare loss to previous loss
+        return torch.acos(torch.dot(WP_grads, BP_grads))
 
 
 
@@ -111,19 +98,21 @@ class PerturbNet(torch.nn.Module):
 
             loss_1 = loss_func(output[: batch_size], target, onehots)#clean loss
             loss_2 = loss_func(output[batch_size: ], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
-            loss_differential = loss_2-loss_1.repeat(self.num_perts) 
+            loss_differential = loss_2-loss_1.repeat(self.num_perts)
 
         elif(self.pert_type.lower() == "cent"):
             half = (self.num_perts * batch_size)
             loss_1 = loss_func(output[:half], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
             loss_2 = loss_func(output[half:], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
-            loss_differential = loss_1 - loss_2
+            
+            loss_differential = loss_1-loss_2
 
         
 
-        loss_differential = loss_differential.reshape(self.num_perts, -1)
-        normalization = self.get_normalization(self.network).unsqueeze(1) #need to get all the normalizers
-        grad_scaling = loss_differential * normalization
+        loss_differential = loss_differential.view(self.num_perts, -1) #dim num_perts, batch sice
+        normalization = self.get_normalization(self.network).unsqueeze(1)  #dim num_perts
+
+        grad_scaling = loss_differential * normalization #each perturbation should be multiplied by its normalization
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
 
 
@@ -150,7 +139,8 @@ class PerturbNet(torch.nn.Module):
                 if hasattr(child, "weight"):
                     grad_params.append(child.weight.grad.view(-1))
                 if hasattr(child, "bias"):
-                    grad_params.append(child.bias.grad.view(-1))
+                    if child.bias is not None:
+                        grad_params.append(child.bias.grad.view(-1))
         grad_params = torch.cat(grad_params)
         return grad_params
 

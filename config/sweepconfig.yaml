@@ -6,12 +6,13 @@ distribution: "normal"
 nb_epochs: 50
 loss_func: "mse" #CCE or MSE
 seed: 42
-device: "4"
+device: "cuda:0"
 loud_test: True
 loud_train: False
 comp_angles: True
 experiment: default
-
+bias: True
+mode: "online"
 
 learning_rate: 
 num_perts:

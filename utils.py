@@ -392,7 +392,6 @@ def next_epoch(
     metrics["train"]["acc"].append(train_results[1])
     if comp_angles:
         metrics["angle"].append(train_results[2])   
-        metrics["one step effectiveness"].append(train_results[3]) 
 
 
     _, _ = train(
@@ -400,7 +399,7 @@ def next_epoch(
                 )
 
     if wandb is not None and comp_angles:
-        wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1], "angle difference": train_results[2], "one step effectiveness":train_results[3]}, step=epoch)
+        wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1], "angle difference": train_results[2]}, step=epoch)
     else:
         wandb.log(  {"test/loss": test_results[0], "test/acc": test_results[1], "train/loss": train_results[0], "train/acc": train_results[1]}, step=epoch)
     return metrics
@@ -430,12 +429,15 @@ def train(
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
-
+        old_params = model.network.state_dict()["1.weight"]
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
         loss = model.train_step(data, target, onehots, loss_func)
         optimizer.step()
 
+        new_params = model.network.state_dict()["1.weight"]
+        #print("difference before and after optimizer.step")
+        #print(torch.sum(torch.subtract(new_params, old_params)))
         if (batch_idx % log_interval == 0) and loud:
             print(
                 "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
@@ -504,36 +506,32 @@ def test_angles(
     test_loss = 0
     correct = 0
     angle = 0
-    one_step_effct = 0
     for data, target in test_loader:
 
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
-        angl, ose = model.compare_BPangles(data, target, onehots, loss_func)
+        angl = model.compare_BPangles(data, target, onehots, loss_func)
         angle +=angl
-        one_step_effct += ose
-        loss, output = model.test_step(data, target, onehots, loss_func)
+        loss, output = model.test_step(data,target, onehots, loss_func)
         test_loss += loss
-        pred = output.argmax(dim=1, keepdim=True)
+        pred = output.argmax(dim=1,keepdim=True)
         correct += pred.eq(target.view_as(pred)).sum().item()
 
 
     angle /= len(test_loader)
     test_loss /= len(test_loader)
-    one_step_effct /= len(test_loader)
     if loud:
         print(
-            "\n Test Epoch {}: Angle: {}, OSE: {}, Loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+            "\n Test Epoch {}: Angle: {}, Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
                 epoch,
                 angle,
-                one_step_effct,
                 test_loss,
                 correct,
                 len(test_loader.dataset),
                 100.0 * correct / len(test_loader.dataset),
             )
         )
-    return test_loss, (100.0 * correct / len(test_loader.dataset)), angle, one_step_effct
+    return test_loss, (100.0 * correct / len(test_loader.dataset)), angle
 
 
 

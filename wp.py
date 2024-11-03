@@ -16,9 +16,11 @@ class WPLinearFunc(torch.autograd.Function):
         assert pert_num > 0, "Number of perturbations should never be zero"
 
         output = torch.mm(input, weights.t())
+        if biases is not None:
+            output += biases
 
         if sample_wise:  #Whether the noise is unique or shared for each element of the batch, determined by sample_wise
-                noise_shape = batch_size*pert_num
+                noise_shape = batch_size
         else:
             noise_shape = pert_num
         noise_shape = [noise_shape] + list(weights.shape)
@@ -27,25 +29,28 @@ class WPLinearFunc(torch.autograd.Function):
 
         if pert_type.lower() == "forw":
             assert batch_size > 0
-
-            output[batch_size:] += WPLinearFunc.add_noise(input[batch_size:], w_noise)
+            output[batch_size:] += WPLinearFunc.add_noise(input[batch_size:], w_noise, sample_wise)
             if biases is not None:
-                b_noise = dist_sampler([pert_num] + list(biases.shape))
-                output += biases
-                output[batch_size:] += torch.tile(b_noise, (batch_size,1))
+                b_noise = dist_sampler([noise_shape[0]] + list(biases.shape))
+                if sample_wise:
+                    output[batch_size:] += b_noise
+                else:
+                    output[batch_size:] += torch.tile(b_noise, (batch_size,1))
 
         elif pert_type.lower() == "cent":
             half = batch_size*pert_num
-            output[:half] += WPLinearFunc.add_noise(input[:half], w_noise)       
-            output[half:] += WPLinearFunc.add_noise(input[half:], -w_noise)
+            output[:half] += WPLinearFunc.add_noise(input[:half], w_noise, sample_wise)       
+            output[half:] += WPLinearFunc.add_noise(input[half:], -w_noise, sample_wise)
 
             if biases is not None:
-                b_noise = dist_sampler([pert_num] + list(biases.shape))
+                b_noise = dist_sampler([noise_shape[0]] + list(biases.shape))
 
-                output += biases 
-                output[:half] += torch.tile(b_noise, (batch_size,1))
-
-                output[half:] -= torch.tile(b_noise, (batch_size,1))
+                if sample_wise:
+                    output[:half] += b_noise
+                    output[half:] -= b_noise
+                else:
+                    output[:half] += torch.tile(b_noise, (batch_size,1))
+                    output[half:] -= torch.tile(b_noise, (batch_size,1))
 
         else:
             raise ValueError('Other perturbation types not yet implemented.')
@@ -54,14 +59,20 @@ class WPLinearFunc(torch.autograd.Function):
 
 
     @staticmethod
-    def add_noise(weights: torch.Tensor, noise: torch.Tensor):
-            """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
+    def add_noise(inputs: torch.Tensor, noisy_weights: torch.Tensor, sample_wise: bool):
+        """Adds noise to the weights. If sample_wise is true, noise is assumed to be unique for each element"""
 
-            if noise.ndim > 2:
-                out = torch.einsum("ni,bki->nk", weights, noise)
-            else:
-                out = torch.einsum("ni,ki->nk", weights, noise)
-            return out
+
+        if sample_wise:
+            assert noisy_weights.shape[0] == inputs.shape[0], "Shape of perturbations should be same as inputs!"
+            outputs =  torch.einsum("noi,ni->no", noisy_weights[0], inputs)
+        else:
+            pert_num = noisy_weights.shape[0]
+            elements_per_batch = int(inputs.shape[0] / noisy_weights.shape[0])
+            reshaped_inputs = inputs.view(pert_num, elements_per_batch, -1)
+            outputs = torch.einsum("boi,bni->bno", noisy_weights, reshaped_inputs).reshape(pert_num*elements_per_batch, -1)
+    
+        return outputs
     
     @staticmethod
     def backward(ctx, grad_output):
@@ -117,20 +128,18 @@ class WPLinear(torch.nn.Linear):
                 self.weight_diff = weight_diff #dims are number of perturbations, outputs, inputs
                 self.bias_diff = bias_diff #dims are number of perturbations, outputs
    
-                if self.num_perts > 1:
-                    noise_dim = self.num_perts
-                elif self.sample_wise:
-                    noise_dim = batch_size//2
+                if self.sample_wise:
+                    noise_dim = batch_size
                 else:
-                    noise_dim = 1
+                    noise_dim = self.num_perts
 
-                self.square_norm = torch.sum( 
+                self.square_norm = torch.sqrt(torch.sum( 
                         (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1
-                    )
+                    ))
                 if self.bias is not None:
-                        self.square_norm += torch.sum(
-                            self.bias_diff.reshape(noise_dim, -1) ** 2, axis=1
-                        )
+                    self.square_norm += torch.sqrt(torch.sum(
+                        self.bias_diff.reshape(noise_dim, -1) ** 2, axis=1
+                    ))
 
                 
         else: #Do not perturb if weights are not being trained.
@@ -144,14 +153,22 @@ class WPLinear(torch.nn.Linear):
         # Rescale grad data - to be used at end of gradient pass
         scaling_factor = scaling_factor.transpose(0,1)
 
+        # Scaling factor \in [batch, num_pert]
+        # Weights \in [batch OR pert, out, in]
+        if self.sample_wise:
+            scaled_weight_diff = scaling_factor[:, :, None, None] * self.weight_diff[:, None, :, :]
+        else:
+            scaled_weight_diff = scaling_factor[:, :, None, None] * self.weight_diff[None, :, :, :]
 
-        scaled_weight_diff = scaling_factor[:, :, None, None] * self.weight_diff
-
-        self.weight.grad = torch.mean(torch.sum(scaled_weight_diff, axis=0), dim=0)
+        self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0)
         
         if self.bias is not None:
-            scaled_bias_diff = scaling_factor[:, :, None] * self.bias_diff
-            self.bias.grad = torch.mean(torch.sum(scaled_bias_diff, axis=0), dim=0)
+            if self.sample_wise:
+                scaled_bias_diff = scaling_factor[:, :, None] * self.bias_diff[:, None, :]
+            else:
+                scaled_bias_diff = scaling_factor[:, :, None] * self.bias_diff[None, :, :]
+
+            self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"
