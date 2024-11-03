@@ -429,15 +429,12 @@ def train(
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
-        old_params = model.network.state_dict()["1.weight"]
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
         loss = model.train_step(data, target, onehots, loss_func)
         optimizer.step()
 
-        new_params = model.network.state_dict()["1.weight"]
-        #print("difference before and after optimizer.step")
-        #print(torch.sum(torch.subtract(new_params, old_params)))
+
         if (batch_idx % log_interval == 0) and loud:
             print(
                 "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
@@ -448,7 +445,7 @@ def train(
                     loss,
                 )
             )
-    loss /= len(train_loader)
+    loss /= len(train_loader.dataset)
     return loss, (100.0 * batch_idx / len(train_loader.dataset))
 
 
@@ -477,7 +474,7 @@ def test(
         correct += pred.eq(target.view_as(pred)).sum().item()
 
 
-    test_loss /= len(test_loader)
+    test_loss /= len(test_loader.dataset)
     if loud:
         print(
             "\n Test Epoch {}: Loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
@@ -507,19 +504,16 @@ def test_angles(
     correct = 0
     angle = 0
     for data, target in test_loader:
-
         onehots = torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         data, target = data.to(device), target.to(device)
         angl = model.compare_BPangles(data, target, onehots, loss_func)
-        angle +=angl
+        angle += angl
         loss, output = model.test_step(data,target, onehots, loss_func)
         test_loss += loss
         pred = output.argmax(dim=1,keepdim=True)
         correct += pred.eq(target.view_as(pred)).sum().item()
-
-
     angle /= len(test_loader)
-    test_loss /= len(test_loader)
+    test_loss /= len(test_loader.dataset)
     if loud:
         print(
             "\n Test Epoch {}: Angle: {}, Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(

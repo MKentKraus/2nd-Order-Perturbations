@@ -95,16 +95,14 @@ class PerturbNet(torch.nn.Module):
         batch_size = data.shape[0]
 
         if(self.pert_type.lower() == "forw"):
-
             loss_1 = loss_func(output[: batch_size], target, onehots)#clean loss
             loss_2 = loss_func(output[batch_size: ], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
             loss_differential = loss_2-loss_1.repeat(self.num_perts)
-
         elif(self.pert_type.lower() == "cent"):
             half = (self.num_perts * batch_size)
             loss_1 = loss_func(output[:half], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
             loss_2 = loss_func(output[half:], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
-            
+
             loss_differential = loss_1-loss_2
 
         
@@ -114,16 +112,14 @@ class PerturbNet(torch.nn.Module):
 
         grad_scaling = loss_differential * normalization #each perturbation should be multiplied by its normalization
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
-
-
-        return loss_1.mean().item()
+        return loss_1.sum().item()
     
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
         self.eval()
         output = self(data)
-        loss = torch.mean(
+        loss = torch.sum(
             loss_func(output, target, onehots)
         )  # sum up batch loss
         loss = loss.item()
