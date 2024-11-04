@@ -3,29 +3,36 @@
 import torch
 import numpy as np
 
+
 class PerturbNet(torch.nn.Module):
     def __init__(
         self,
         network: torch.nn.Module,
         num_perts: int = 1,
         pert_type: str = "forw",
-        BP_network: torch.nn.Module = None
+        BP_network: torch.nn.Module = None,
     ):
         super(PerturbNet, self).__init__()
         self.network = network
         self.pert_type = pert_type
         self.num_perts = num_perts
 
-        if (BP_network is not None):
+        if BP_network is not None:
             self.BP_network = BP_network
-            pytorch_total_params = sum(p.numel() for p in BP_network.parameters() if p.requires_grad) #should get the total number of trainable parameters           
-            self.comp_params = np.random.permutation(pytorch_total_params)[:100] #randomly selects a thousand random parameters to compare the angle on.    
+            pytorch_total_params = sum(
+                p.numel() for p in BP_network.parameters() if p.requires_grad
+            )  # should get the total number of trainable parameters
+            self.comp_params = np.random.permutation(pytorch_total_params)[
+                :20
+            ]  # randomly selects a thousand random parameters to compare the angle on.
 
     @torch.inference_mode()
     def forward(self, x):
 
         if self.training:
-            dim = torch.ones(x.dim(), dtype=torch.int8).tolist() #repeat requires a list/tuple of ints with all dimensions of the tensor
+            dim = torch.ones(
+                x.dim(), dtype=torch.int8
+            ).tolist()  # repeat requires a list/tuple of ints with all dimensions of the tensor
             if self.pert_type.lower() == "forw":
                 dim[0] = self.num_perts + 1
             elif self.pert_type.lower() == "cent":
@@ -33,9 +40,8 @@ class PerturbNet(torch.nn.Module):
             x = x.repeat(dim)
         return self.network(x)
 
-
-    def apply_grad_scaling_to_noise_layers(self, network, scaling): 
-        for child in network.children(): #iterates over layers of the network.
+    def apply_grad_scaling_to_noise_layers(self, network, scaling):
+        for child in network.children():  # iterates over layers of the network.
             # are you a container?
             if len(list(child.children())) > 0:
                 self.apply_grad_scaling_to_noise_layers(child, scaling)
@@ -64,70 +70,83 @@ class PerturbNet(torch.nn.Module):
         normalization = num_params / normalizer
 
         return normalization
- 
+
     def compare_BPangles(self, data, target, onehots, loss_func):
         """Compare angles of a weight perturbation update to a backpropagation update. If input lenght is more than 1, multiple perturbations will be applieds"""
-        assert self.BP_network is not None, "To compare against BP, an equivalent model using default torch layers must be provided"
+        assert (
+            self.BP_network is not None
+        ), "To compare against BP, an equivalent model using default torch layers must be provided"
         self.BP_network.load_state_dict(self.network.state_dict())
 
         bp_loss = self.BP_update(data, target, onehots, loss_func)
-        BP_grads = self.get_grads(self.BP_network)[self.comp_params] #gets all the gradients, then selects the ones for comparison
-
+        BP_grads = self.get_grads(self.BP_network)[
+            self.comp_params
+        ]  # gets all the gradients, then selects the ones for comparison
 
         wp_loss = self.train_step(data, target, onehots, loss_func)
 
         WP_grads = self.get_grads(self.network)[self.comp_params]
-        #compute the angle between the two vectors by using the dot produ ct
+        # compute the angle between the two vectors by using the dot produ ct
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
         BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
-
-
-        #compare loss to previous loss
+        print(WP_grads)
+        # compare loss to previous loss
         return torch.acos(torch.dot(WP_grads, BP_grads))
-
-
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
         self.train()
-        #mean over losses from different perturbations
+        # mean over losses from different perturbations
         output = self(data)
         batch_size = data.shape[0]
 
-        if(self.pert_type.lower() == "forw"):
-            loss_1 = loss_func(output[: batch_size], target, onehots)#clean loss
-            loss_2 = loss_func(output[batch_size: ], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
-            loss_differential = loss_2-loss_1.repeat(self.num_perts)
-        elif(self.pert_type.lower() == "cent"):
-            half = (self.num_perts * batch_size)
-            loss_1 = loss_func(output[:half], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
-            loss_2 = loss_func(output[half:], target.repeat(self.num_perts), onehots.repeat(self.num_perts,1))
+        if self.pert_type.lower() == "forw":
+            loss_1 = loss_func(output[:batch_size], target, onehots)  # clean loss
+            loss_2 = loss_func(
+                output[batch_size:],
+                target.repeat(self.num_perts),
+                onehots.repeat(self.num_perts, 1),
+            )
+            loss_differential = loss_2 - loss_1.repeat(self.num_perts)
+        elif self.pert_type.lower() == "cent":
+            half = self.num_perts * batch_size
+            loss_1 = loss_func(
+                output[:half],
+                target.repeat(self.num_perts),
+                onehots.repeat(self.num_perts, 1),
+            )
+            loss_2 = loss_func(
+                output[half:],
+                target.repeat(self.num_perts),
+                onehots.repeat(self.num_perts, 1),
+            )
 
-            loss_differential = loss_1-loss_2
+            loss_differential = loss_1 - loss_2
 
-        
+        loss_differential = loss_differential.view(
+            self.num_perts, -1
+        )  # dim num_perts, batch sice
+        normalization = self.get_normalization(self.network).unsqueeze(
+            1
+        )  # dim num_perts
 
-        loss_differential = loss_differential.view(self.num_perts, -1) #dim num_perts, batch sice
-        normalization = self.get_normalization(self.network).unsqueeze(1)  #dim num_perts
-
-        grad_scaling = loss_differential * normalization #each perturbation should be multiplied by its normalization
+        grad_scaling = (
+            loss_differential * normalization
+        )  # each perturbation should be multiplied by its normalization
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
         return loss_1.sum().item()
-    
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
         self.eval()
         output = self(data)
-        loss = torch.sum(
-            loss_func(output, target, onehots)
-        )  # sum up batch loss
+        loss = torch.sum(loss_func(output, target, onehots))  # sum up batch loss
         loss = loss.item()
         return loss, output
 
     def get_grads(self, network):
         grad_params = []
-        for child in network.children(): #iterates over layers of the network.
+        for child in network.children():  # iterates over layers of the network.
             # are you a container?
             if len(list(child.children())) > 0:
                 grad_params.append(self.get_grads(child).view(-1))
@@ -149,11 +168,9 @@ class PerturbNet(torch.nn.Module):
         loss.backward()
         return loss.item()
 
+
 class BPNet(torch.nn.Module):
-    def __init__(
-        self,
-        network
-    ):
+    def __init__(self, network):
         super(BPNet, self).__init__()
         self.network = network
 
@@ -180,4 +197,3 @@ class BPNet(torch.nn.Module):
             loss_func(output, target, onehots)
         ).item()  # sum up batch loss
         return loss, output
-    
