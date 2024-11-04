@@ -10,7 +10,7 @@ device: "cuda:0"
 loud_test: True
 loud_train: False
 comp_angles: True
-experiment: default
+validation: False
 bias: True
 mode: "online"
 

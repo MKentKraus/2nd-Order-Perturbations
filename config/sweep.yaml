@@ -1,7 +1,7 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name: 30.10 parallel perturbations test
+name: 04.11 angle test
 method: grid
 metric:
   goal: maximize
@@ -12,9 +12,9 @@ parameters:
   algorithm:
       values: ["Forw", "Cent"]
   num_perts:
-      values: [1,8,64,256]
+      values: [1, 8, 64, 256, 2048]
   sigma:
-      values: [1e-3, 1e-4]
+      values: [1e-3]
 command:
   - ${env}
   - python

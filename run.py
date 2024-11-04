@@ -34,7 +34,7 @@ def run(config) -> None:
 
     # Load dataset
     train_loader, test_loader, in_shape, out_shape = utils.construct_dataloaders(
-        config.dataset, config.batch_size, device
+        config.dataset, config.batch_size, device, validation=config.validation
     )
     in_shape = np.prod(in_shape)  # for linear networks
 
@@ -110,6 +110,7 @@ def run(config) -> None:
             loud_test=config.loud_test,
             loud_train=config.loud_train,
             comp_angles=config.comp_angles,
+            validation=config.validation,
             wandb=wandb,
             num_classes=out_shape,
         )

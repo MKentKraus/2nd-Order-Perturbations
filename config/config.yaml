@@ -11,6 +11,7 @@ device: "cuda:0"
 loud_test: True
 loud_train: False
 comp_angles: True
+validation: False
 num_perts: 1
 bias: True
 learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
