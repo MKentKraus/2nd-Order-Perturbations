@@ -1,20 +1,20 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name: 04.11 angle test
+name: BP 20 learning rates, powers of 2, validation
 method: grid
 metric:
   goal: maximize
-  name: test/acc
+  name: validation/acc
 parameters:
   learning_rate:
-      values: [1e-6]
+      values: ["2**-6","2**-7","2**-8","2**-9","2**-10","2**-11","2**-12","2**-13","2**-14","2**-15","2**-16","2**-17","2**-18","2**-19","2**-20","2**-21","2**-22","2**-23","2**-24","2**-25"]
   algorithm:
-      values: ["Forw", "Cent"]
+      values: ["BP"]
   num_perts:
-      values: [1, 8, 64, 256, 2048]
+      values: [0]
   sigma:
-      values: [1e-3]
+      values: [0]
 command:
   - ${env}
   - python

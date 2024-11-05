@@ -11,12 +11,12 @@ device: "cuda:0"
 loud_test: True
 loud_train: False
 comp_angles: True
-validation: False
-num_perts: 1
+validation: True
+num_perts: 64
 bias: True
-learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
+learning_rate: 10**-6 #1e-2 for CCE, 1e-6 for MSE
 
 project: MetaWP
 entity: brai-lab
-name: Please be better
+name: Testing
 mode: "offline"

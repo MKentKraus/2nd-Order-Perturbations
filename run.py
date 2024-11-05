@@ -13,7 +13,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="config/", config_name="config")
+@hydra.main(version_base="1.3", config_path="config/", config_name="sweepconfig")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
@@ -25,6 +25,7 @@ def run(config) -> None:
         mode=config.mode,
     )
     print(cfg)
+    print(eval(config.learning_rate))
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -76,16 +77,19 @@ def run(config) -> None:
         ).to(device)
 
         network = BPNet(model)
-
     # Initialize metric storage
     metrics = utils.init_metric(config.comp_angles)
 
     # Define optimizers
     fwd_optimizer = None
     if config.optimizer_type.lower() == "adam":
-        fwd_optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+        fwd_optimizer = torch.optim.Adam(
+            model.parameters(), lr=eval(config.learning_rate)
+        )
     elif config.optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate)
+        fwd_optimizer = torch.optim.SGD(
+            model.parameters(), lr=eval(config.learning_rate)
+        )
 
     # Choose Loss function
     if config.loss_func.lower() == "cce":

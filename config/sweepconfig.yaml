@@ -3,14 +3,14 @@ batch_size: 128
 optimizer_type: "sgd" #sgd or adam
 
 distribution: "normal"
-nb_epochs: 50
+nb_epochs: 100
 loss_func: "mse" #CCE or MSE
 seed: 42
 device: "cuda:0"
 loud_test: True
 loud_train: False
-comp_angles: True
-validation: False
+comp_angles: False
+validation: True
 bias: True
 mode: "online"
 
