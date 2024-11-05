@@ -285,11 +285,15 @@ def construct_dataloaders(
         train_dataset = tv_dataset(
             root="./datasets", train=True, download=True, transform=train_transforms
         )
-        print()
+
+        in_shape = tuple(train_dataset[0][0].shape)
+        out_shape = len(train_dataset.classes)
+
         if validation:
             train_dataset, test_dataset = torch.utils.data.random_split(
                 train_dataset, [len(train_dataset) - 10_000, 10_000]
             )
+
         else:
             test_dataset = tv_dataset(
                 root="./datasets", train=False, download=True, transform=test_transforms
@@ -334,9 +338,6 @@ def construct_dataloaders(
             test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
         # elif ... # TODO: Add more datasets here and add to the assert above
-
-    in_shape = tuple(train_dataset[0][0].shape)
-    out_shape = len(train_dataset.classes)
 
     return train_loader, test_loader, in_shape, out_shape
 
