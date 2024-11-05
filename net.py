@@ -89,9 +89,8 @@ class PerturbNet(torch.nn.Module):
         # compute the angle between the two vectors by using the dot produ ct
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
         BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
-        print(WP_grads)
         # compare loss to previous loss
-        return torch.acos(torch.dot(WP_grads, BP_grads))
+        return torch.acos(torch.dot(WP_grads, BP_grads)).item()
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):

@@ -421,18 +421,18 @@ def next_epoch(
 
     if wandb is not None:
         if comp_angles:
-            wandb.log({"angle difference": test_metrics[2]}, step=epoch)
+            wandb.log({"angle/angle": test_metrics[2]}, step=epoch)
         if validation:
             wandb.log(
-                {"validation loss": test_metrics[0], "validation acc": test_metrics[1]},
+                {"validation/loss": test_metrics[0], "validation/acc": test_metrics[1]},
                 step=epoch,
             )
         else:
             wandb.log(
-                {"test loss": test_metrics[0], "test acc": test_metrics[1]}, step=epoch
+                {"test/loss": test_metrics[0], "test/acc": test_metrics[1]}, step=epoch
             )
         wandb.log(
-            {"train loss": train_metrics[0], "train acc": train_metrics[1]}, step=epoch
+            {"train/loss": train_metrics[0], "train/acc": train_metrics[1]}, step=epoch
         )
     return metrics
 

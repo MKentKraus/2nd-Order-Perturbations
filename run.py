@@ -96,34 +96,38 @@ def run(config) -> None:
         loss_func = (
             lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
         )
+    with tqdm(range(config.nb_epochs)) as t:
+        for e in t:
+            metrics = utils.next_epoch(
+                network,
+                metrics,
+                device,
+                fwd_optimizer,
+                test_loader,
+                train_loader,
+                loss_func,
+                e,
+                loud_test=config.loud_test,
+                loud_train=config.loud_train,
+                comp_angles=config.comp_angles,
+                validation=config.validation,
+                wandb=wandb,
+                num_classes=out_shape,
+            )
 
-    for e in tqdm(range(config.nb_epochs)):
-        metrics = utils.next_epoch(
-            network,
-            metrics,
-            device,
-            fwd_optimizer,
-            test_loader,
-            train_loader,
-            loss_func,
-            e,
-            loud_test=config.loud_test,
-            loud_train=config.loud_train,
-            comp_angles=config.comp_angles,
-            validation=config.validation,
-            wandb=wandb,
-            num_classes=out_shape,
+            if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
+                metrics["train"]["loss"][-1]
+            ):
+                print("NaN detected, aborting training")
+                break
+    if config.comp_angles:
+        wandb.log(
+            {
+                "angle/mean angle": np.mean(metrics["angle"]),
+                "angle/std angle": np.std(metrics["angle"]),
+            }
         )
-
-        if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
-            metrics["train"]["loss"][-1]
-        ):
-            print("NaN detected, aborting training")
-            break
-
-    # torch.save(network.state_dict(),"2nd-Order-Perturbations/results/models/BP-MNIST-1e-6.pt")
-    # np.save("2nd-Order-Perturbations/results/metrics/Metrics-BP-MNIST-1e-6.npy", metrics)
-
+    wandb.log({"Runtime": round(t.format_dict["elapsed"], 1)})
     wandb.finish()
 
 
