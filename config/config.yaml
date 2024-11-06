@@ -1,22 +1,35 @@
+#Setup 
+nb_epochs: 100
+bias: True
 dataset: "MNIST"
 batch_size: 128
-optimizer_type: "sgd" #sgd or adam
-algorithm: "forw" #forw, cent or bp
-sigma: 1e-3
-distribution: "normal"
-nb_epochs: 100
-loss_func: "mse" #CCE or MSE
 seed: 42
-device: "cuda:0"
+device: "cpu"
+
+#Testing settings
 loud_test: True
 loud_train: False
 comp_angles: True
 validation: False
-num_perts: 1
-bias: True
-learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
 
+#Model options
+optimizer_type: "sgd" #sgd or adam
+distribution: "normal"
+loss_func: "mse" #CCE or MSE
+learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
+num_perts: 1
+algorithm: "forw" #forw, cent or bp
+sigma: 1e-3
+
+#Wandb
 project: MetaWP
 entity: brai-lab
 name: Please be better
 mode: "offline"
+
+
+
+
+
+
+
