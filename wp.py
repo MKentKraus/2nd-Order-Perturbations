@@ -13,6 +13,7 @@ class WPLinearFunc(torch.autograd.Function):
         input,
         weights,
         biases,
+        sigmas,
         pert_type,
         dist_sampler,
         sample_wise,
@@ -34,10 +35,14 @@ class WPLinearFunc(torch.autograd.Function):
             noise_shape = batch_size
         else:
             noise_shape = pert_num
+
+        sigmas = sigmas.repeat(
+            noise_shape, 1, 1
+        )  # noise shape should be copied, input and output size kept the same
+        print(sigmas.shape)
         noise_shape = [noise_shape] + list(weights.shape)
-
-        w_noise = dist_sampler(noise_shape)
-
+        print(noise_shape)
+        w_noise = dist_sampler(noise_shape) * sigmas
         if pert_type.lower() == "forw":
             assert batch_size > 0
             output[batch_size:] += WPLinearFunc.add_noise(
@@ -102,6 +107,7 @@ class WPLinear(torch.nn.Linear):
         *args,
         pert_type: str = "forw",
         dist_sampler: torch.distributions.Distribution = None,
+        sigmas: torch.tensor,
         sample_wise: bool = False,
         num_perts: int = 1,
         **kwargs,
@@ -115,6 +121,7 @@ class WPLinear(torch.nn.Linear):
         self.weight_diff = None
         self.bias_diff = None
         self.num_perts = num_perts
+        self.sigmas = torch.nn.parameter.Parameter(sigmas, requires_grad=True)
 
     def __str__(self):
         return "WPLinear"
@@ -133,6 +140,7 @@ class WPLinear(torch.nn.Linear):
                 input,
                 self.weight,
                 self.bias,
+                self.sigmas,
                 self.pert_type,
                 self.dist_sampler,
                 self.sample_wise,
@@ -170,6 +178,9 @@ class WPLinear(torch.nn.Linear):
 
         # Scaling factor \in [batch, num_pert]
         # Weights \in [batch OR pert, out, in]
+
+        self.sigmas.grad = torch.full(size=(self.sigmas.shape), fill_value=8000.08)
+
         if self.sample_wise:
             scaled_weight_diff = (
                 scaling_factor[:, :, None, None] * self.weight_diff[:, None, :, :]

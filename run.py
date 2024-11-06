@@ -53,6 +53,11 @@ def run(config) -> None:
                 bias=config.bias,
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
+                sigmas=torch.full(
+                    size=(out_shape, in_shape),
+                    fill_value=config.sigma,
+                    dtype=torch.float32,
+                ),
                 sample_wise=False,
                 num_perts=config.num_perts,
             ),
@@ -82,10 +87,12 @@ def run(config) -> None:
 
     # Define optimizers
     fwd_optimizer = None
+
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     elif config.optimizer_type.lower() == "sgd":
         fwd_optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate)
+    # Define optimizers
 
     # Choose Loss function
     if config.loss_func.lower() == "cce":

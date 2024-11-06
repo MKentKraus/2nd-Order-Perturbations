@@ -17,14 +17,12 @@ def make_dist_sampler(
     """Create a distribution sampler for the noise"""
 
     if distribution.lower() == "normal":
-        dist_sampler = lambda x: sigma * (
-            torch.empty(x, device=device).normal_(mean=0, std=1)
-        )
+        dist_sampler = lambda x: (torch.empty(x, device=device).normal_(mean=0, std=1))
     elif distribution.lower() == "bernoulli":
         distribution = torch.distributions.Bernoulli(
             torch.tensor([0.5]).to(torch.float32).to(device)
         )
-        dist_sampler = lambda x: sigma * (distribution.sample(x).squeeze_(-1) - 0.5)
+        dist_sampler = lambda x: (distribution.sample(x).squeeze_(-1) - 0.5)
     else:
         raise ValueError(f"Distribution {distribution} not recognized")
 
@@ -407,7 +405,6 @@ def next_epoch(
 
     metrics["train"]["loss"].append(train_metrics[0])
     metrics["train"]["acc"].append(train_metrics[1])
-
     _, _ = train(
         network,
         device,
@@ -460,6 +457,7 @@ def train(
         Determines the number of batches between the logging of accuracy
     """
     model.train()
+
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
         onehots = (
