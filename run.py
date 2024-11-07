@@ -53,11 +53,7 @@ def run(config) -> None:
                 bias=config.bias,
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
-                sigmas=torch.full(
-                    size=(out_shape, in_shape),
-                    fill_value=config.sigma,
-                    dtype=torch.float32,
-                ),
+                sigma=config.sigma,
                 sample_wise=False,
                 num_perts=config.num_perts,
             ),
