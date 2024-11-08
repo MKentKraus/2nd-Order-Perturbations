@@ -13,8 +13,10 @@ class WPLinearFunc(torch.autograd.Function):
         input,
         weights,
         weight_sigmas,
+        weight_mus,
         biases,
         bias_sigmas,
+        bias_mus,
         pert_type,
         dist_sampler,
         sample_wise,
@@ -38,9 +40,11 @@ class WPLinearFunc(torch.autograd.Function):
             noise_shape = pert_num
 
         noise_shape = [noise_shape] + list(weights.shape)
-        weight_sigmas = weight_sigmas.repeat(noise_shape[0], 1, 1)
 
-        w_noise = dist_sampler(noise_shape) * weight_sigmas
+        weight_sigmas = weight_sigmas.repeat(noise_shape[0], 1, 1)
+        weight_mus = weight_mus.repeat(noise_shape[0], 1, 1)
+
+        w_noise = (dist_sampler(noise_shape) + weight_mus) * weight_sigmas
         if pert_type.lower() == "forw":
             assert batch_size > 0
             output[batch_size:] += WPLinearFunc.add_noise(
@@ -48,9 +52,10 @@ class WPLinearFunc(torch.autograd.Function):
             )
             if biases is not None:
                 bias_sigmas = bias_sigmas.repeat(noise_shape[0], 1, 1)
-                b_noise = (
-                    dist_sampler([noise_shape[0]] + list(biases.shape)) * bias_sigmas
-                )
+                bias_mus = bias_mus.repeat(noise_shape[0], 1, 1)
+                b_noise_shape = [noise_shape[0]] + list(biases.shape)
+                b_noise = (dist_sampler(b_noise_shape) + bias_mus) * bias_sigmas
+
                 if sample_wise:
                     output[batch_size:] += b_noise
                 else:
@@ -63,10 +68,9 @@ class WPLinearFunc(torch.autograd.Function):
 
             if biases is not None:
                 bias_sigmas = bias_sigmas.repeat(noise_shape[0], 1, 1)
-
-                b_noise = (
-                    dist_sampler([noise_shape[0]] + list(biases.shape)) * bias_sigmas
-                )
+                bias_mus = bias_mus.repeat(noise_shape[0], 1, 1)
+                b_noise_shape = [noise_shape[0]] + list(biases.shape)
+                b_noise = (dist_sampler(b_noise_shape) + bias_mus) * bias_sigmas
 
                 if sample_wise:
                     output[:half] += b_noise
@@ -132,6 +136,11 @@ class WPLinear(torch.nn.Linear):
             requires_grad=True,
         )
 
+        self.weight_mus = torch.nn.parameter.Parameter(
+            torch.zeros(size=(self.weight.shape), dtype=torch.float32),
+            requires_grad=True,
+        )
+
         if self.bias is not None:
             self.bias_sigmas = torch.nn.parameter.Parameter(
                 torch.full(
@@ -139,8 +148,14 @@ class WPLinear(torch.nn.Linear):
                 ),
                 requires_grad=True,
             )
+
+            self.bias_mus = torch.nn.parameter.Parameter(
+                torch.zeros(size=(self.bias.shape), dtype=torch.float32),
+                requires_grad=True,
+            )
         else:
             self.bias_sigmas = None
+            self.bias_mus = None
 
     def __str__(self):
         return "WPLinear"
@@ -159,8 +174,10 @@ class WPLinear(torch.nn.Linear):
                 input,
                 self.weight,
                 self.weight_sigmas,
+                self.weight_mus,
                 self.bias,
                 self.bias_sigmas,
+                self.bias_mus,
                 self.pert_type,
                 self.dist_sampler,
                 self.sample_wise,
@@ -209,9 +226,7 @@ class WPLinear(torch.nn.Linear):
             )
 
         self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0)
-        self.self.weight_sigmas.grad = (
-            torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0) * 1e-2
-        )
+        self.weight_mus.grad = self.weight.grad - self.weight_mus
 
         if self.bias is not None:
             if self.sample_wise:
@@ -224,9 +239,7 @@ class WPLinear(torch.nn.Linear):
                 )
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
-            self.self.weight_sigmas.grad = (
-                torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0) * 1e-2
-            )
+            self.bias_mus.grad = self.bias.grad - self.bias_mus
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

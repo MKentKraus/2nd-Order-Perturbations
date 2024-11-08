@@ -87,7 +87,18 @@ def run(config) -> None:
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     elif config.optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate)
+        fwd_optimizer = torch.optim.SGD(
+            [
+                {"params": model[1].weight},
+                {"params": model[1].bias},
+                {
+                    "params": model[1].weight_mus,
+                    "lr": config.learning_rate * 1e-2,
+                },
+                {"params": model[1].bias_mus, "lr": config.learning_rate * 1e-2},
+            ],
+            lr=config.learning_rate,
+        )
     # Define optimizers
 
     # Choose Loss function
