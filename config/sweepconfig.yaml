@@ -1,23 +1,28 @@
+#Setup 
+nb_epochs: 100
+bias: True
 dataset: "MNIST"
 batch_size: 128
-optimizer_type: "sgd" #sgd or adam
-
-distribution: "normal"
-nb_epochs: 100
-loss_func: "mse" #CCE or MSE
 seed: 42
 device: "cuda:0"
+
+#Testing settings
 loud_test: True
 loud_train: False
-comp_angles: False
-validation: True
-bias: True
-mode: "online"
+comp_angles: True
+validation: False
 
+#Model options
+optimizer_type: "sgd" #sgd or adam
+distribution: "normal"
+loss_func: "mse" #CCE or MSE
 learning_rate: 
 num_perts:
 algorithm:
 sigma:
+
+#Wandb
 project: 
 entity: 
 name:
+mode: "online"
