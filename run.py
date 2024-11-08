@@ -43,7 +43,7 @@ def run(config) -> None:
     network = None
     if config.algorithm.lower() == "forw" or config.algorithm.lower() == "cent":
         dist_sampler = utils.make_dist_sampler(
-            config.sigma, config.distribution, device
+            eval(config.sigma), config.distribution, device
         )
 
         model = torch.nn.Sequential(
