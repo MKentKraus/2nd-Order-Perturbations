@@ -40,9 +40,9 @@ class WPLinearFunc(torch.autograd.Function):
             noise_shape = pert_num
 
         noise_shape = [noise_shape] + list(weights.shape)
-
-        weight_sigmas = weight_sigmas.repeat(noise_shape[0], 1, 1)
-        weight_mus = weight_mus.repeat(noise_shape[0], 1, 1)
+        if noise_shape[0] > 1:
+            weight_sigmas = weight_sigmas.repeat(noise_shape[0], 1, 1)
+            weight_mus = weight_mus.repeat(noise_shape[0], 1, 1)
 
         w_noise = (dist_sampler(noise_shape) + weight_mus) * weight_sigmas
         if pert_type.lower() == "forw":
@@ -51,8 +51,8 @@ class WPLinearFunc(torch.autograd.Function):
                 input[batch_size:], w_noise, sample_wise
             )
             if biases is not None:
-                bias_sigmas = bias_sigmas.repeat(noise_shape[0], 1, 1)
-                bias_mus = bias_mus.repeat(noise_shape[0], 1, 1)
+                bias_sigmas = bias_sigmas.repeat(noise_shape[0], 1)
+                bias_mus = bias_mus.repeat(noise_shape[0], 1)
                 b_noise_shape = [noise_shape[0]] + list(biases.shape)
                 b_noise = (dist_sampler(b_noise_shape) + bias_mus) * bias_sigmas
 
