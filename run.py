@@ -53,7 +53,7 @@ def run(config) -> None:
                 bias=config.bias,
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
-                sigma=config.sigma,
+                sigma=eval(config.sigma),
                 sample_wise=False,
                 num_perts=config.num_perts,
             ),
@@ -93,11 +93,11 @@ def run(config) -> None:
                 {"params": model[1].bias},
                 {
                     "params": model[1].weight_mus,
-                    "lr": config.learning_rate * 1e-2,
+                    "lr": eval(config.learning_rate) * 1e-2,
                 },
-                {"params": model[1].bias_mus, "lr": config.learning_rate * 1e-2},
+                {"params": model[1].bias_mus, "lr": eval(config.learning_rate) * 1e-2},
             ],
-            lr=config.learning_rate,
+            lr=eval(config.learning_rate),
         )
     # Define optimizers
 

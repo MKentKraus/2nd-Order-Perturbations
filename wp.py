@@ -67,8 +67,8 @@ class WPLinearFunc(torch.autograd.Function):
             output[half:] += WPLinearFunc.add_noise(input[half:], -w_noise, sample_wise)
 
             if biases is not None:
-                bias_sigmas = bias_sigmas.repeat(noise_shape[0], 1, 1)
-                bias_mus = bias_mus.repeat(noise_shape[0], 1, 1)
+                bias_sigmas = bias_sigmas.repeat(noise_shape[0], 1)
+                bias_mus = bias_mus.repeat(noise_shape[0], 1)
                 b_noise_shape = [noise_shape[0]] + list(biases.shape)
                 b_noise = (dist_sampler(b_noise_shape) + bias_mus) * bias_sigmas
 
