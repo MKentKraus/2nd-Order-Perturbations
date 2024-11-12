@@ -9,8 +9,8 @@ device: "cuda:0"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: True
-validation: False
+comp_angles: False
+validation: True
 
 #Model options
 optimizer_type: "sgd" #sgd or adam

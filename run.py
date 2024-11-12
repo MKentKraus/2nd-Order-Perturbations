@@ -13,7 +13,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="config/", config_name="config")
+@hydra.main(version_base="1.3", config_path="config/", config_name="sweepconfig")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 

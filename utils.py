@@ -299,11 +299,11 @@ def construct_dataloaders(
 
         # ? Why do these not use the kwargs made above?
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, num_workers=4
+            train_dataset, batch_size=batch_size, shuffle=True, num_workers=2
         )
 
         test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=False, num_workers=4
+            test_dataset, batch_size=batch_size, shuffle=False, num_workers=2
         )
 
     else:

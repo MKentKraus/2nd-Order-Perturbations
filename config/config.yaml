@@ -9,22 +9,22 @@ device: "cpu"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: True
+comp_angles: False
 validation: False
 
 #Model options
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "mse" #CCE or MSE
-learning_rate: 1e-6 #1e-2 for CCE, 1e-6 for MSE
+learning_rate: "2**-21" #1e-2 for CCE, 1e-6 for MSE
 num_perts: 1
-algorithm: "forw" #forw, cent or bp
-sigma: 1e-3
+algorithm: "Cent" #forw, cent or bp
+sigma: "2**-19"
 
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: Please be better
+name: Mu test
 mode: "offline"
 
 
