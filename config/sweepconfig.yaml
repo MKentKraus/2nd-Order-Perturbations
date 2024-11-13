@@ -1,15 +1,15 @@
 #Setup 
-nb_epochs: 100
+nb_epochs: 500
 bias: True
 dataset: "MNIST"
 batch_size: 128
-seed: 42
+seed:
 device: "cuda:0"
 
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: True
+comp_angles: False
 validation: False
 
 #Model options

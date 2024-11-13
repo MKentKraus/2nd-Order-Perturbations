@@ -163,7 +163,7 @@ class PerturbNet(torch.nn.Module):
         assert self.BP_network is not None
 
         output = self.BP_network(data)
-        loss = loss_func(output, target, onehots).mean()
+        loss = loss_func(output, target, onehots).sum()
         loss.backward()
         return loss.item()
 
@@ -182,17 +182,13 @@ class BPNet(torch.nn.Module):
     def train_step(self, data, target, onehots, loss_func):
         self.train()
         output = self(data)
-        loss = loss_func(output, target, onehots)
-        total_loss = loss.mean()
-        total_loss.backward()
-
-        return total_loss.item()
+        loss = loss_func(output, target, onehots).sum()
+        loss.backward()
+        return loss.item()
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
         self.eval()
         output = self(data)
-        loss = torch.mean(
-            loss_func(output, target, onehots)
-        ).item()  # sum up batch loss
+        loss = torch.sum(loss_func(output, target, onehots)).item()  # sum up batch loss
         return loss, output
