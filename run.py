@@ -13,7 +13,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="config/", config_name="sweepconfig")
+@hydra.main(version_base="1.3", config_path="config/", config_name="config")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
@@ -54,6 +54,7 @@ def run(config) -> None:
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
                 sigma=eval(config.sigma),
+                switch=config.switch,
                 sample_wise=False,
                 num_perts=config.num_perts,
             ),
@@ -63,6 +64,14 @@ def run(config) -> None:
             torch.nn.Flatten(),
             torch.nn.Linear(in_shape, out_shape, bias=config.bias),
         ).to(device)
+
+        regular_weights = []
+        meta_weights = []
+        for name, param in model.named_parameters():
+            if name.endswith("mu") or name.endswith("sigma"):
+                meta_weights.append(param)
+            else:
+                regular_weights.append(param)
 
         network = PerturbNet(model, config.num_perts, config.algorithm, model_bp)
 
@@ -89,15 +98,15 @@ def run(config) -> None:
     elif config.optimizer_type.lower() == "sgd":
         fwd_optimizer = torch.optim.SGD(
             [
-                {"params": model[1].weight},
-                {"params": model[1].bias},
                 {
-                    "params": model[1].weight_mus,
-                    "lr": eval(config.learning_rate) * 1e-2,
+                    "params": regular_weights,
+                    "lr": eval(config.learning_rate),
                 },
-                {"params": model[1].bias_mus, "lr": eval(config.learning_rate) * 1e-2},
-            ],
-            lr=eval(config.learning_rate),
+                {
+                    "params": meta_weights,
+                    "lr": eval(config.meta_learning_rate),
+                },
+            ]
         )
     # Define optimizers
 
@@ -112,6 +121,7 @@ def run(config) -> None:
         )
     with tqdm(range(config.nb_epochs)) as t:
         for e in t:
+
             metrics = utils.next_epoch(
                 network,
                 metrics,

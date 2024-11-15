@@ -4,7 +4,7 @@ bias: True
 dataset: "MNIST"
 batch_size: 128
 seed: 42
-device: "cpu"
+device: "cuda:0"
 
 #Testing settings
 loud_test: True
@@ -17,9 +17,11 @@ optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "mse" #CCE or MSE
 learning_rate: "2**-21" #1e-2 for CCE, 1e-6 for MSE
-num_perts: 1
+num_perts: 500
 algorithm: "Cent" #forw, cent or bp
 sigma: "2**-19"
+meta_learning_rate: "1e-13"
+switch: 0
 
 #Wandb
 project: MetaWP

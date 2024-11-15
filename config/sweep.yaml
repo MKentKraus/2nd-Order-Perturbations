@@ -1,20 +1,24 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name: 11.11 MNIST mean learning test
+name: 15.11 MNIST mean learning test
 method: grid
 metric:
   goal: minimize
-  name: test/loss
+  name: validation/loss
 parameters:
   learning_rate:
       values: ["2**-21"]
   algorithm:
       values: ["Forw", "Cent"]
   num_perts:
-      values: [1, 32, 512]
+      values: [1]
   sigma:
       values: ["2**-19"]
+  meta_learning_rate:
+      values: ["0**1", "10**-8", "10**-9", "10**-10", "10**-11"]
+  switch: 
+      values: [0,1]
 command:
   - ${env}
   - python

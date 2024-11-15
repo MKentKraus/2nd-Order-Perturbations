@@ -20,6 +20,8 @@ learning_rate:
 num_perts:
 algorithm:
 sigma:
+meta_learning_rate:
+switch: 
 
 #Wandb
 project: 
