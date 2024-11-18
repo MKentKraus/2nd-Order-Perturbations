@@ -71,12 +71,21 @@ class PerturbNet(torch.nn.Module):
 
         return normalization
 
-    def compare_BPangles(self, data, target, onehots, loss_func):
-        """Compare angles of a weight perturbation update to a backpropagation update. If input lenght is more than 1, multiple perturbations will be applieds"""
+    def compare_BP(self, data, target, onehots, loss_func, load_weights=True):
+        """Compare a weight perturbation update to a backpropagation update"""
         assert (
             self.BP_network is not None
         ), "To compare against BP, an equivalent model using default torch layers must be provided"
-        self.BP_network.load_state_dict(self.network.state_dict())
+
+        if load_weights:
+            WP_dict = self.network.state_dict()
+            Filter = {
+                k: v
+                for k, v in self.network.state_dict().items()
+                if k in self.BP_network.state_dict()
+            }  # Filters the WP dict so that only those weights that are also in the BP model remain
+            WP_dict.update(Filter)
+            self.BP_network.load_state_dict(WP_dict)
 
         bp_loss = self.BP_update(data, target, onehots, loss_func)
         BP_grads = self.get_grads(self.BP_network)[
@@ -89,8 +98,7 @@ class PerturbNet(torch.nn.Module):
         # compute the angle between the two vectors by using the dot produ ct
         WP_grads = torch.div(WP_grads, torch.linalg.vector_norm(WP_grads))
         BP_grads = torch.div(BP_grads, torch.linalg.vector_norm(BP_grads))
-        # compare loss to previous loss
-        return torch.acos(torch.dot(WP_grads, BP_grads)).item()
+        return torch.acos(torch.dot(WP_grads, BP_grads)).item(), bp_loss, wp_loss
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
@@ -133,7 +141,9 @@ class PerturbNet(torch.nn.Module):
             loss_differential * normalization
         )  # each perturbation should be multiplied by its normalization
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
-        return loss_1.sum().item()
+
+        loss_1 = loss_1.sum().item()
+        return loss_1 / self.num_perts
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):

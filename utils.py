@@ -375,26 +375,16 @@ def next_epoch(
 
     """
 
-    if comp_angles:
-        test_metrics = test_angles(
-            network,
-            device,
-            test_loader,
-            epoch,
-            loss_func,
-            loud_test,
-            num_classes=num_classes,
-        )
-    else:
-        test_metrics = test(
-            network,
-            device,
-            test_loader,
-            epoch,
-            loss_func,
-            loud_test,
-            num_classes=num_classes,
-        )
+    test_metrics = test(
+        network,
+        device,
+        test_loader,
+        epoch,
+        loss_func,
+        comp_angles,
+        loud_test,
+        num_classes=num_classes,
+    )
 
     metrics["test"]["loss"].append(test_metrics[0])
     metrics["test"]["acc"].append(test_metrics[1])
@@ -402,26 +392,37 @@ def next_epoch(
         metrics["angle"].append(test_metrics[2])
 
     train_metrics = test(
-        network, device, train_loader, epoch, loss_func, num_classes=num_classes
+        network,
+        device,
+        train_loader,
+        epoch,
+        loss_func,
+        comp_angles=False,
+        loud=False,
+        num_classes=num_classes,
     )
 
     metrics["train"]["loss"].append(train_metrics[0])
     metrics["train"]["acc"].append(train_metrics[1])
 
-    _, _ = train(
+    train_results = train(
         network,
         device,
         train_loader,
         optimizer,
         epoch,
         loss_func,
+        comp_angles=comp_angles,
         loud=loud_train,
         num_classes=num_classes,
     )
 
     if wandb is not None:
         if comp_angles:
-            wandb.log({"angle/angle": test_metrics[2]}, step=epoch)
+            wandb.log(
+                {"angle/angle": test_metrics[2], "angle/OSE": train_results[2]},
+                step=epoch,
+            )
         if validation:
             wandb.log(
                 {"validation/loss": test_metrics[0], "validation/acc": test_metrics[1]},
@@ -444,6 +445,7 @@ def train(
     optimizer,
     epoch,
     loss_func,
+    comp_angles=False,
     log_interval=100,
     loud=False,
     num_classes=10,
@@ -459,6 +461,11 @@ def train(
     log_interval : int
         Determines the number of batches between the logging of accuracy
     """
+
+    bp_loss = np.zeros(2)
+    wp_loss = np.zeros(2)
+    i = 0
+
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
@@ -466,7 +473,20 @@ def train(
             torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         )
         data, target = data.to(device), target.to(device)
-        loss = model.train_step(data, target, onehots, loss_func)
+
+        if batch_idx >= len(train_loader) - 2 and comp_angles:
+            if i == 0:
+                _, bp_loss[i], loss = model.compare_BP(
+                    data, target, onehots, loss_func, load_weights=True
+                )
+            elif i == 1:
+                _, bp_loss[i], loss = model.compare_BP(
+                    data, target, onehots, loss_func, load_weights=False
+                )
+            wp_loss[i] = loss
+            i += 1
+        else:
+            loss = model.train_step(data, target, onehots, loss_func)
         optimizer.step()
 
         if (batch_idx % log_interval == 0) and loud:
@@ -480,61 +500,25 @@ def train(
                 )
             )
     loss /= len(train_loader.dataset)
-    return loss, (100.0 * batch_idx / len(train_loader.dataset))
+
+    if comp_angles:
+        ose = (wp_loss[0] - wp_loss[1]) / (
+            bp_loss[0] - bp_loss[1] + 1e-16
+        )  # loss improvement in WP over the loss improvement in BP
+        return loss, (100.0 * batch_idx / len(train_loader.dataset)), ose
+    return (
+        loss,
+        (100.0 * batch_idx / len(train_loader.dataset)),
+    )
 
 
-@torch.no_grad()
 def test(
     model,
     device,
     test_loader,
     epoch,
     loss_func,
-    loud=False,
-    num_classes=10,
-):
-    """
-    Computes loss of model on test set
-    Parameters
-    ----------
-    loud : bool
-        If True, prints average loss and accuracy at the end of epoch
-    """
-
-    model.eval()
-    test_loss = 0
-    correct = 0
-    for data, target in test_loader:
-
-        onehots = (
-            torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
-        )
-        data, target = data.to(device), target.to(device)
-        loss, output = model.test_step(data, target, onehots, loss_func)
-        test_loss += loss
-        pred = output.argmax(dim=1, keepdim=True)
-        correct += pred.eq(target.view_as(pred)).sum().item()
-
-    test_loss /= len(test_loader.dataset)
-    if loud:
-        print(
-            "\n Test Epoch {}: Loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n".format(
-                epoch,
-                test_loss,
-                correct,
-                len(test_loader.dataset),
-                100.0 * correct / len(test_loader.dataset),
-            )
-        )
-    return test_loss, (100.0 * correct / len(test_loader.dataset))
-
-
-def test_angles(
-    model,
-    device,
-    test_loader,
-    epoch,
-    loss_func,
+    comp_angles,
     loud=True,
     num_classes=10,
 ):
@@ -546,41 +530,58 @@ def test_angles(
         If True, prints average loss and accuracy at the end of epoch
     """
 
-    assert (
-        type(test_loader.sampler) is torch.utils.data.sampler.SequentialSampler
-    ), "Shuffle must be False for the Dataloader, to ensure that angles are compared between the same elements each epoch"
-
-    model.eval()
-    test_loss = 0
-    correct = 0
-    angle = 0
-    for batch_idx, (data, target) in enumerate(test_loader):
-        onehots = (
-            torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
-        )
-        data, target = data.to(device), target.to(device)
-
-        if batch_idx == 0:
-            angle = model.compare_BPangles(data, target, onehots, loss_func)
-
-        loss, output = model.test_step(data, target, onehots, loss_func)
-        test_loss += loss
-        pred = output.argmax(dim=1, keepdim=True)
-        correct += pred.eq(target.view_as(pred)).sum().item()
-
-    test_loss /= len(test_loader.dataset)
-    if loud:
-        print(
-            "\n Test Epoch {}: Angle: {}, Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
-                epoch,
-                angle,
-                test_loss,
-                correct,
-                len(test_loader.dataset),
-                100.0 * correct / len(test_loader.dataset),
+    with torch.no_grad():
+        model.eval()
+        test_loss = 0
+        correct = 0
+        angle = 0
+        for batch_idx, (data, target) in enumerate(test_loader):
+            onehots = (
+                torch.nn.functional.one_hot(target, num_classes)
+                .to(device)
+                .to(data.dtype)
             )
-        )
-    return test_loss, (100.0 * correct / len(test_loader.dataset)), angle
+
+            data, target = data.to(device), target.to(device)
+            loss, output = model.test_step(data, target, onehots, loss_func)
+            test_loss += loss
+            pred = output.argmax(dim=1, keepdim=True)
+            correct += pred.eq(target.view_as(pred)).sum().item()
+
+        test_loss /= len(test_loader.dataset)
+    if comp_angles:
+        assert (
+            type(test_loader.sampler) is torch.utils.data.sampler.SequentialSampler
+        ), "Shuffle must be False for the Dataloader, to ensure that angles are compared between the same elements each epoch"
+
+        angle, _, _ = model.compare_BP(
+            data, target, onehots, loss_func
+        )  # compare angles on the final batch of each epoch
+
+        if loud:
+            print(
+                "\n Test Epoch {}: Angle: {}, Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+                    epoch,
+                    angle,
+                    test_loss,
+                    correct,
+                    len(test_loader.dataset),
+                    100.0 * correct / len(test_loader.dataset),
+                )
+            )
+        return test_loss, (100.0 * correct / len(test_loader.dataset)), angle
+    else:
+        if loud:
+            print(
+                "\n Test Epoch {}: Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+                    epoch,
+                    test_loss,
+                    correct,
+                    len(test_loader.dataset),
+                    100.0 * correct / len(test_loader.dataset),
+                )
+            )
+        return test_loss, (100.0 * correct / len(test_loader.dataset))
 
 
 def init_metric(comp_angles=False):

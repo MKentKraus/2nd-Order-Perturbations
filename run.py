@@ -13,7 +13,7 @@ from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
 
 
-@hydra.main(version_base="1.3", config_path="config/", config_name="sweepconfig")
+@hydra.main(version_base="1.3", config_path="config/", config_name="config")
 def run(config) -> None:
     cfg = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
@@ -25,7 +25,17 @@ def run(config) -> None:
         mode=config.mode,
     )
     print(cfg)
-    print(eval(config.learning_rate))
+
+    if isinstance(config.learning_rate, float):
+        lr = config.learning_rate
+    else:
+        lr = eval(config.learning_rate)
+
+    if isinstance(config.sigma, float):
+        sigma = config.sigma
+    else:
+        sigma = eval(config.sigma)
+
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -42,9 +52,7 @@ def run(config) -> None:
     # Define network
     network = None
     if config.algorithm.lower() == "forw" or config.algorithm.lower() == "cent":
-        dist_sampler = utils.make_dist_sampler(
-            eval(config.sigma), config.distribution, device
-        )
+        dist_sampler = utils.make_dist_sampler(sigma, config.distribution, device)
 
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
@@ -83,13 +91,9 @@ def run(config) -> None:
     # Define optimizers
     fwd_optimizer = None
     if config.optimizer_type.lower() == "adam":
-        fwd_optimizer = torch.optim.Adam(
-            model.parameters(), lr=eval(config.learning_rate)
-        )
+        fwd_optimizer = torch.optim.Adam(network.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(
-            model.parameters(), lr=eval(config.learning_rate)
-        )
+        fwd_optimizer = torch.optim.SGD(network.parameters(), lr=lr)
 
     # Choose Loss function
     if config.loss_func.lower() == "cce":
