@@ -17,14 +17,12 @@ def make_dist_sampler(
     """Create a distribution sampler for the noise"""
 
     if distribution.lower() == "normal":
-        dist_sampler = lambda x: sigma * (
-            torch.empty(x, device=device).normal_(mean=0, std=1)
-        )
+        dist_sampler = lambda x: (torch.empty(x, device=device).normal_(mean=0, std=1))
     elif distribution.lower() == "bernoulli":
         distribution = torch.distributions.Bernoulli(
             torch.tensor([0.5]).to(torch.float32).to(device)
         )
-        dist_sampler = lambda x: sigma * (distribution.sample(x).squeeze_(-1) - 0.5)
+        dist_sampler = lambda x: (distribution.sample(x).squeeze_(-1) - 0.5)
     else:
         raise ValueError(f"Distribution {distribution} not recognized")
 
@@ -301,11 +299,11 @@ def construct_dataloaders(
 
         # ? Why do these not use the kwargs made above?
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, num_workers=4
+            train_dataset, batch_size=batch_size, shuffle=True, num_workers=2
         )
 
         test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=False, num_workers=4
+            test_dataset, batch_size=batch_size, shuffle=False, num_workers=2
         )
 
     else:
@@ -467,6 +465,7 @@ def train(
     i = 0
 
     model.train()
+
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
         onehots = (
@@ -474,7 +473,9 @@ def train(
         )
         data, target = data.to(device), target.to(device)
 
-        if batch_idx >= len(train_loader) - 2 and comp_angles:
+        if (
+            batch_idx == len(train_loader) - 2 or batch_idx == len(train_loader) - 3
+        ) and comp_angles:
             if i == 0:
                 _, bp_loss[i], loss = model.compare_BP(
                     data, target, onehots, loss_func, load_weights=True

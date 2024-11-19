@@ -1,22 +1,29 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name: BP (sum loss) Test, MNIST
+name: 18.11 CIFAR10 mean learning test
 method: grid
 metric:
   goal: minimize
-  name: test/loss
+  name: validation/loss
 parameters:
-  learning_rate:
-      values: ["2**-14"]
-  algorithm:
-      values: ["BP"]
-  num_perts:
-      values: [0]
-  sigma:
-      values: [0]
-  seed:
-    values: [42, 45, 68, 89, 93]
+    learning_rate:
+        values: ["2**-25"]
+    algorithm:
+        values: ["Cent"]
+    num_perts:
+        values: [1,32]
+    sigma:
+        values: ["2**-16"]
+    meta_learning_rate:
+        values: ["0", "10**-9", "10**-10", "10**-11"]
+    switch: 
+        values: [0,1]
+    seed: 
+        values: [42]
+    mu_scaling_factor:
+        values: [0.1]
+    
 command:
   - ${env}
   - python

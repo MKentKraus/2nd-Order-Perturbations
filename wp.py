@@ -12,11 +12,16 @@ class WPLinearFunc(torch.autograd.Function):
         ctx,
         input,
         weights,
+        weight_sigma,
+        weight_mu,
         biases,
+        bias_sigma,
+        bias_mu,
         pert_type,
         dist_sampler,
         sample_wise,
         pert_num,
+        mu_scaling,
         batch_size,
     ):
 
@@ -34,30 +39,40 @@ class WPLinearFunc(torch.autograd.Function):
             noise_shape = batch_size
         else:
             noise_shape = pert_num
+
         noise_shape = [noise_shape] + list(weights.shape)
 
-        w_noise = dist_sampler(noise_shape)
-
-        if pert_type.lower() == "forw":
+        w_noise = (
+            dist_sampler(noise_shape) * weight_sigma.repeat(noise_shape[0], 1, 1)
+        ) + weight_mu.repeat(noise_shape[0], 1, 1) * mu_scaling * weight_sigma.repeat(
+            noise_shape[0], 1, 1
+        )
+        if pert_type.lower() == "ffd":
             assert batch_size > 0
             output[batch_size:] += WPLinearFunc.add_noise(
                 input[batch_size:], w_noise, sample_wise
             )
             if biases is not None:
-                b_noise = dist_sampler([noise_shape[0]] + list(biases.shape))
+                b_noise_shape = [noise_shape[0]] + list(biases.shape)
+                b_noise = (
+                    dist_sampler(b_noise_shape) * bias_sigma.repeat(noise_shape[0], 1)
+                ) + bias_mu.repeat(noise_shape[0], 1)
+
                 if sample_wise:
                     output[batch_size:] += b_noise
                 else:
                     output[batch_size:] += torch.tile(b_noise, (batch_size, 1))
 
-        elif pert_type.lower() == "cent":
+        elif pert_type.lower() == "cfd":
             half = batch_size * pert_num
             output[:half] += WPLinearFunc.add_noise(input[:half], w_noise, sample_wise)
             output[half:] += WPLinearFunc.add_noise(input[half:], -w_noise, sample_wise)
 
             if biases is not None:
-                b_noise = dist_sampler([noise_shape[0]] + list(biases.shape))
-
+                b_noise_shape = [noise_shape[0]] + list(biases.shape)
+                b_noise = (
+                    dist_sampler(b_noise_shape) * bias_sigma.repeat(noise_shape[0], 1)
+                ) + bias_mu.repeat(noise_shape[0], 1)
                 if sample_wise:
                     output[:half] += b_noise
                     output[half:] -= b_noise
@@ -102,6 +117,9 @@ class WPLinear(torch.nn.Linear):
         *args,
         pert_type: str = "forw",
         dist_sampler: torch.distributions.Distribution = None,
+        sigma,
+        switch,
+        mu_scaling_factor,
         sample_wise: bool = False,
         num_perts: int = 1,
         **kwargs,
@@ -115,6 +133,32 @@ class WPLinear(torch.nn.Linear):
         self.weight_diff = None
         self.bias_diff = None
         self.num_perts = num_perts
+        self.mu_scaling_factor = mu_scaling_factor
+        self.weight_sigma = torch.nn.parameter.Parameter(
+            torch.full(size=(self.weight.shape), fill_value=sigma, dtype=torch.float32),
+            requires_grad=True,
+        )
+        self.switch = switch
+        self.weight_mu = torch.nn.parameter.Parameter(
+            torch.zeros(size=(self.weight.shape), dtype=torch.float32),
+            requires_grad=True,
+        )
+
+        if self.bias is not None:
+            self.bias_sigma = torch.nn.parameter.Parameter(
+                torch.full(
+                    size=(self.bias.shape), fill_value=sigma, dtype=torch.float32
+                ),
+                requires_grad=True,
+            )
+
+            self.bias_mu = torch.nn.parameter.Parameter(
+                torch.zeros(size=(self.bias.shape), dtype=torch.float32),
+                requires_grad=True,
+            )
+        else:
+            self.bias_sigma = None
+            self.bias_mu = None
 
     def __str__(self):
         return "WPLinear"
@@ -124,19 +168,23 @@ class WPLinear(torch.nn.Linear):
         # A clean and noisy input are both processed by a layer to produce
         if self.training:
 
-            if self.pert_type.lower() == "forw":
+            if self.pert_type.lower() == "ffd":
                 batch_size = int(input.shape[0] / (self.num_perts + 1))
-            elif self.pert_type.lower() == "cent":
+            elif self.pert_type.lower() == "cfd":
                 batch_size = int(input.shape[0] / (self.num_perts * 2))
-
             (output, weight_diff, bias_diff) = WPLinearFunc().apply(
                 input,
                 self.weight,
+                self.weight_sigma,
+                self.weight_mu,
                 self.bias,
+                self.bias_sigma,
+                self.bias_mu,
                 self.pert_type,
                 self.dist_sampler,
                 self.sample_wise,
                 self.num_perts,
+                self.mu_scaling_factor,
                 batch_size,
             )
 
@@ -170,6 +218,7 @@ class WPLinear(torch.nn.Linear):
 
         # Scaling factor \in [batch, num_pert]
         # Weights \in [batch OR pert, out, in]
+
         if self.sample_wise:
             scaled_weight_diff = (
                 scaling_factor[:, :, None, None] * self.weight_diff[:, None, :, :]
@@ -192,6 +241,20 @@ class WPLinear(torch.nn.Linear):
                 )
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
+
+        if self.switch == 0:
+            self.bias_mu.grad = -(self.bias.grad - self.bias_mu)
+            self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
+        else:
+            self.bias_mu.grad = self.bias.grad - self.bias_mu
+            self.weight_mu.grad = self.weight.grad - self.weight_mu
+
+        self.weight_mu.grad = torch.div(
+            self.weight_mu.grad, torch.linalg.vector_norm(self.weight_mu.grad)
+        )
+        self.bias_mu.grad = torch.div(
+            self.bias_mu.grad, torch.linalg.vector_norm(self.bias_mu.grad)
+        )
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

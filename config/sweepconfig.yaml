@@ -1,7 +1,7 @@
 #Setup 
-nb_epochs: 500
+nb_epochs: 100
 bias: True
-dataset: "MNIST"
+dataset: "CIFAR10"
 batch_size: 128
 seed:
 device: "cuda:0"
@@ -10,16 +10,19 @@ device: "cuda:0"
 loud_test: True
 loud_train: False
 comp_angles: False
-validation: False
+validation: True
 
 #Model options
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
-loss_func: "mse" #CCE or MSE
+loss_func: "cce" #CCE or MSE
 learning_rate: 
 num_perts:
 algorithm:
 sigma:
+meta_learning_rate:
+switch: 
+mu_scaling_factor: 
 
 #Wandb
 project: 

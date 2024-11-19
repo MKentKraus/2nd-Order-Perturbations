@@ -26,15 +26,22 @@ def run(config) -> None:
     )
     print(cfg)
 
-    if isinstance(config.learning_rate, float):
+    if isinstance(config.learning_rate, float) or isinstance(config.learning_rate, int):
         lr = config.learning_rate
     else:
         lr = eval(config.learning_rate)
 
-    if isinstance(config.sigma, float):
+    if isinstance(config.sigma, float) or isinstance(config.sigma, int):
         sigma = config.sigma
     else:
         sigma = eval(config.sigma)
+
+    if isinstance(config.meta_learning_rate, float) or isinstance(
+        config.meta_learning_rate, int
+    ):
+        meta_lr = config.meta_learning_rate
+    else:
+        meta_lr = eval(config.meta_learning_rate)
 
     # Initializing random seeding
     torch.manual_seed(config.seed)
@@ -51,7 +58,7 @@ def run(config) -> None:
 
     # Define network
     network = None
-    if config.algorithm.lower() == "forw" or config.algorithm.lower() == "cent":
+    if config.algorithm.lower() == "ffd" or config.algorithm.lower() == "cfd":
         dist_sampler = utils.make_dist_sampler(sigma, config.distribution, device)
 
         model = torch.nn.Sequential(
@@ -62,6 +69,9 @@ def run(config) -> None:
                 bias=config.bias,
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
+                sigma=sigma,
+                switch=config.switch,
+                mu_scaling_factor=config.mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
             ),
@@ -73,6 +83,13 @@ def run(config) -> None:
         ).to(device)
 
         network = PerturbNet(model, config.num_perts, config.algorithm, model_bp)
+        regular_weights = []
+        meta_weights = []
+        for name, param in network.named_parameters():
+            if name.endswith("mu") or name.endswith("sigma"):
+                meta_weights.append(param)
+            else:
+                regular_weights.append(param)
 
     elif config.algorithm.lower() == "bp":
         config.comp_angles = (
@@ -90,10 +107,23 @@ def run(config) -> None:
 
     # Define optimizers
     fwd_optimizer = None
+
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(network.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(network.parameters(), lr=lr)
+        fwd_optimizer = torch.optim.SGD(
+            [
+                {
+                    "params": regular_weights,
+                    "lr": lr,
+                },
+                {
+                    "params": meta_weights,
+                    "lr": meta_lr,
+                },
+            ]
+        )
+    # Define optimizers
 
     # Choose Loss function
     if config.loss_func.lower() == "cce":
@@ -106,6 +136,7 @@ def run(config) -> None:
         )
     with tqdm(range(config.nb_epochs)) as t:
         for e in t:
+
             metrics = utils.next_epoch(
                 network,
                 metrics,

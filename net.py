@@ -9,7 +9,7 @@ class PerturbNet(torch.nn.Module):
         self,
         network: torch.nn.Module,
         num_perts: int = 1,
-        pert_type: str = "forw",
+        pert_type: str = "ffd",
         BP_network: torch.nn.Module = None,
     ):
         super(PerturbNet, self).__init__()
@@ -33,9 +33,9 @@ class PerturbNet(torch.nn.Module):
             dim = torch.ones(
                 x.dim(), dtype=torch.int8
             ).tolist()  # repeat requires a list/tuple of ints with all dimensions of the tensor
-            if self.pert_type.lower() == "forw":
+            if self.pert_type.lower() == "ffd":
                 dim[0] = self.num_perts + 1
-            elif self.pert_type.lower() == "cent":
+            elif self.pert_type.lower() == "cfd":
                 dim[0] = self.num_perts * 2
             x = x.repeat(dim)
         return self.network(x)
@@ -78,13 +78,12 @@ class PerturbNet(torch.nn.Module):
         ), "To compare against BP, an equivalent model using default torch layers must be provided"
 
         if load_weights:
-            WP_dict = self.network.state_dict()
-            Filter = {
+            WP_dict = {
                 k: v
                 for k, v in self.network.state_dict().items()
                 if k in self.BP_network.state_dict()
             }  # Filters the WP dict so that only those weights that are also in the BP model remain
-            WP_dict.update(Filter)
+
             self.BP_network.load_state_dict(WP_dict)
 
         bp_loss = self.BP_update(data, target, onehots, loss_func)
@@ -107,7 +106,7 @@ class PerturbNet(torch.nn.Module):
         output = self(data)
         batch_size = data.shape[0]
 
-        if self.pert_type.lower() == "forw":
+        if self.pert_type.lower() == "ffd":
             loss_1 = loss_func(output[:batch_size], target, onehots)  # clean loss
             loss_2 = loss_func(
                 output[batch_size:],
@@ -115,7 +114,7 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
             loss_differential = loss_2 - loss_1.repeat(self.num_perts)
-        elif self.pert_type.lower() == "cent":
+        elif self.pert_type.lower() == "cfd":
             half = self.num_perts * batch_size
             loss_1 = loss_func(
                 output[:half],
