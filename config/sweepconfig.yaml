@@ -9,7 +9,7 @@ device: "cuda:0"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: False
+comp_angles: True
 validation: True
 
 #Model options
@@ -21,7 +21,6 @@ num_perts:
 algorithm:
 sigma:
 meta_learning_rate:
-switch: 
 mu_scaling_factor: 
 
 #Wandb

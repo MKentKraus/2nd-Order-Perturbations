@@ -118,7 +118,6 @@ class WPLinear(torch.nn.Linear):
         pert_type: str = "forw",
         dist_sampler: torch.distributions.Distribution = None,
         sigma,
-        switch,
         mu_scaling_factor,
         sample_wise: bool = False,
         num_perts: int = 1,
@@ -138,7 +137,6 @@ class WPLinear(torch.nn.Linear):
             torch.full(size=(self.weight.shape), fill_value=sigma, dtype=torch.float32),
             requires_grad=True,
         )
-        self.switch = switch
         self.weight_mu = torch.nn.parameter.Parameter(
             torch.zeros(size=(self.weight.shape), dtype=torch.float32),
             requires_grad=True,
@@ -230,6 +228,11 @@ class WPLinear(torch.nn.Linear):
 
         self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0)
 
+        self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
+        self.weight_mu.grad = torch.div(
+            self.weight_mu.grad, torch.linalg.vector_norm(self.weight_mu.grad)
+        )
+
         if self.bias is not None:
             if self.sample_wise:
                 scaled_bias_diff = (
@@ -242,19 +245,11 @@ class WPLinear(torch.nn.Linear):
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
-        if self.switch == 0:
             self.bias_mu.grad = -(self.bias.grad - self.bias_mu)
-            self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
-        else:
-            self.bias_mu.grad = self.bias.grad - self.bias_mu
-            self.weight_mu.grad = self.weight.grad - self.weight_mu
 
-        self.weight_mu.grad = torch.div(
-            self.weight_mu.grad, torch.linalg.vector_norm(self.weight_mu.grad)
-        )
-        self.bias_mu.grad = torch.div(
-            self.bias_mu.grad, torch.linalg.vector_norm(self.bias_mu.grad)
-        )
+            self.bias_mu.grad = torch.div(
+                self.bias_mu.grad, torch.linalg.vector_norm(self.bias_mu.grad)
+            )
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

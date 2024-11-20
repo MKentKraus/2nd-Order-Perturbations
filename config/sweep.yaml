@@ -1,7 +1,7 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name: 18.11 CIFAR10 mean learning test
+name: Meta learning rate and mu scaling factor test (lower lr's). CIFAR10, CFD, CCE. 
 method: grid
 metric:
   goal: minimize
@@ -10,20 +10,18 @@ parameters:
     learning_rate:
         values: ["2**-25"]
     algorithm:
-        values: ["Cent"]
+        values: ["CFD"]
     num_perts:
-        values: [1,32]
+        values: [1]
     sigma:
         values: ["2**-16"]
-    meta_learning_rate:
-        values: ["0", "10**-9", "10**-10", "10**-11"]
-    switch: 
-        values: [0,1]
     seed: 
         values: [42]
+    meta_learning_rate:
+        values: ["1e-5","1e-6","1e-7","1e-8", "1e-9","1e-10","1e-11"]
     mu_scaling_factor:
-        values: [0.1]
-    
+        values: [65536, 1, 1e-1, 1e-2, 1e-3]
+
 command:
   - ${env}
   - python

@@ -70,7 +70,6 @@ def run(config) -> None:
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
                 sigma=sigma,
-                switch=config.switch,
                 mu_scaling_factor=config.mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
@@ -111,7 +110,7 @@ def run(config) -> None:
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(network.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(
+        fwd_optimizer = torch.optim.SGD(  # This needs to change
             [
                 {
                     "params": regular_weights,

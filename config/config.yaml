@@ -21,7 +21,6 @@ num_perts: 1
 algorithm: "ffd" #ffd, cfd or bp
 sigma: "2**-16"
 meta_learning_rate: "1e-10"
-switch: 1
 mu_scaling_factor: 0.1
 
 #Wandb
