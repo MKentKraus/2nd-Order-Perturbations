@@ -43,6 +43,12 @@ def run(config) -> None:
     else:
         meta_lr = eval(config.meta_learning_rate)
 
+    if isinstance(config.mu_scaling_factor, float) or isinstance(
+        config.mu_scaling_factor, int
+    ):
+        mu_scaling_factor = config.mu_scaling_factor
+    else:
+        mu_scaling_factor = eval(config.mu_scaling_factor)
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -70,7 +76,7 @@ def run(config) -> None:
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
                 sigma=sigma,
-                mu_scaling_factor=config.mu_scaling_factor,
+                mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
             ),
@@ -84,7 +90,16 @@ def run(config) -> None:
         network = PerturbNet(model, config.num_perts, config.algorithm, model_bp)
         regular_weights = []
         meta_weights = []
-        for name, param in network.named_parameters():
+
+        # If comp angles, optimizer should update both BP and WP model, so we need to iterate through network.named_params
+
+        param_list = (
+            network.named_parameters()
+            if config.comp_angles
+            else model.named_parameters()
+        )
+
+        for name, param in param_list:
             if name.endswith("mu") or name.endswith("sigma"):
                 meta_weights.append(param)
             else:
@@ -108,20 +123,30 @@ def run(config) -> None:
     fwd_optimizer = None
 
     if config.optimizer_type.lower() == "adam":
-        fwd_optimizer = torch.optim.Adam(network.parameters(), lr=lr)
+        fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
-        fwd_optimizer = torch.optim.SGD(  # This needs to change
-            [
-                {
-                    "params": regular_weights,
-                    "lr": lr,
-                },
-                {
-                    "params": meta_weights,
-                    "lr": meta_lr,
-                },
-            ]
-        )
+
+        # What should be updated
+        # If BP, just model.params()
+        # If WP and not meta and not Angles, network.params()
+        # IF WP and meta but not angle, model.regular_weights and meta_weights
+        # If WP and meta and angles, network. regular params and meta_weights
+
+        if config.algorithm.lower() == "bp":
+            fwd_optimizer = torch.optim.SGD(model.parameters(), lr)
+        else:
+            fwd_optimizer = torch.optim.SGD(
+                [
+                    {
+                        "params": regular_weights,
+                        "lr": lr,
+                    },
+                    {
+                        "params": meta_weights,
+                        "lr": meta_lr,
+                    },
+                ]
+            )
     # Define optimizers
 
     # Choose Loss function
