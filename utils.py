@@ -345,6 +345,7 @@ def next_epoch(
     metrics,
     device,
     optimizer,
+    meta_optimizer,
     test_loader,
     train_loader,
     loss_func,
@@ -408,6 +409,7 @@ def next_epoch(
         device,
         train_loader,
         optimizer,
+        meta_optimizer,
         epoch,
         loss_func,
         comp_angles=comp_angles,
@@ -423,16 +425,24 @@ def next_epoch(
             )
         if validation:
             wandb.log(
-                {"validation/loss": test_metrics[0], "validation/acc": test_metrics[1]},
+                {
+                    "validation/loss": test_metrics[0],
+                    "validation/acc": test_metrics[1],
+                    "train/loss": train_metrics[0],
+                    "train/acc": train_metrics[1],
+                },
                 step=epoch,
             )
         else:
             wandb.log(
-                {"test/loss": test_metrics[0], "test/acc": test_metrics[1]}, step=epoch
+                {
+                    "test/loss": test_metrics[0],
+                    "test/acc": test_metrics[1],
+                    "train/loss": train_metrics[0],
+                    "train/acc": train_metrics[1],
+                },
+                step=epoch,
             )
-        wandb.log(
-            {"train/loss": train_metrics[0], "train/acc": train_metrics[1]}, step=epoch
-        )
     return metrics
 
 
@@ -441,6 +451,7 @@ def train(
     device,
     train_loader,
     optimizer,
+    meta_optimizer,
     epoch,
     loss_func,
     comp_angles=False,
@@ -476,19 +487,17 @@ def train(
         if (
             batch_idx == len(train_loader) - 2 or batch_idx == len(train_loader) - 3
         ) and comp_angles:
-            if i == 0:
-                _, bp_loss[i], loss = model.compare_BP(
-                    data, target, onehots, loss_func, load_weights=True
-                )
-            elif i == 1:
-                _, bp_loss[i], loss = model.compare_BP(
-                    data, target, onehots, loss_func, load_weights=False
-                )
+            _, bp_loss[i], loss = model.compare_BP(
+                data, target, onehots, loss_func, load_weights=(i == 0)
+            )
             wp_loss[i] = loss
             i += 1
         else:
             loss = model.train_step(data, target, onehots, loss_func)
         optimizer.step()
+
+        if meta_optimizer is not None:
+            meta_optimizer.step()
 
         if (batch_idx % log_interval == 0) and loud:
             print(
@@ -500,17 +509,16 @@ def train(
                     loss,
                 )
             )
-    loss /= len(train_loader.dataset)
 
+    loss /= len(train_loader.dataset)
+    train_results = [loss, (100.0 * batch_idx / len(train_loader.dataset))]
     if comp_angles:
         ose = (wp_loss[0] - wp_loss[1]) / (
             bp_loss[0] - bp_loss[1] + 1e-16
         )  # loss improvement in WP over the loss improvement in BP
-        return loss, (100.0 * batch_idx / len(train_loader.dataset)), ose
-    return (
-        loss,
-        (100.0 * batch_idx / len(train_loader.dataset)),
-    )
+        train_results.append(ose)
+
+    return train_results
 
 
 def test(
@@ -559,30 +567,19 @@ def test(
             data, target, onehots, loss_func
         )  # compare angles on the final batch of each epoch
 
-        if loud:
-            print(
-                "\n Test Epoch {}: Angle: {}, Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
-                    epoch,
-                    angle,
-                    test_loss,
-                    correct,
-                    len(test_loader.dataset),
-                    100.0 * correct / len(test_loader.dataset),
-                )
+    if loud:
+        print(
+            "\n Test Epoch {}: Angle: {}, Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+                epoch,
+                angle if comp_angles else "not measured",
+                test_loss,
+                correct,
+                len(test_loader.dataset),
+                100.0 * correct / len(test_loader.dataset),
             )
-        return test_loss, (100.0 * correct / len(test_loader.dataset)), angle
-    else:
-        if loud:
-            print(
-                "\n Test Epoch {}: Loss: {:.15f}, Accuracy: {}/{} ({:.0f}%)\n".format(
-                    epoch,
-                    test_loss,
-                    correct,
-                    len(test_loader.dataset),
-                    100.0 * correct / len(test_loader.dataset),
-                )
-            )
-        return test_loss, (100.0 * correct / len(test_loader.dataset))
+        )
+
+    return test_loss, (100.0 * correct / len(test_loader.dataset)), angle
 
 
 def init_metric(comp_angles=False):
@@ -591,8 +588,8 @@ def init_metric(comp_angles=False):
 
     Parameters
     ----------
-    validation : bool
-        If True, dictionary contains "val" instead of "test" keyword.
+    comp_angles : bool
+        If True, dictionary contains "angle" and "one step effectiveness" fields.
 
     Returns
     -------

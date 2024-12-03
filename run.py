@@ -121,6 +121,7 @@ def run(config) -> None:
 
     # Define optimizers
     fwd_optimizer = None
+    meta_optimizer = None
 
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -135,18 +136,10 @@ def run(config) -> None:
         if config.algorithm.lower() == "bp":
             fwd_optimizer = torch.optim.SGD(model.parameters(), lr)
         else:
-            fwd_optimizer = torch.optim.SGD(
-                [
-                    {
-                        "params": regular_weights,
-                        "lr": lr,
-                    },
-                    {
-                        "params": meta_weights,
-                        "lr": meta_lr,
-                    },
-                ]
-            )
+            fwd_optimizer = torch.optim.SGD(regular_weights, lr)
+
+            meta_optimizer = torch.optim.SGD(meta_weights, meta_lr)
+
     # Define optimizers
 
     # Choose Loss function
@@ -166,6 +159,7 @@ def run(config) -> None:
                 metrics,
                 device,
                 fwd_optimizer,
+                meta_optimizer,
                 test_loader,
                 train_loader,
                 loss_func,
