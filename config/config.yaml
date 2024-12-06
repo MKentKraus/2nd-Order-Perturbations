@@ -1,7 +1,7 @@
 #Setup 
 nb_epochs: 100
 bias: True
-dataset: "MNIST"
+dataset: "CIFAR10"
 batch_size: 128
 seed: 42
 device: "cuda:0"
@@ -9,7 +9,7 @@ device: "cuda:0"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: True
+comp_angles: False
 validation: True
 
 #Model options
@@ -18,15 +18,15 @@ distribution: "normal"
 loss_func: "cce" #CCE or MSE
 learning_rate: "2**-25" 
 num_perts: 1
-algorithm: "ffd" #ffd, cfd or bp
+algorithm: "Grad_CFD" #ffd, cfd or bp
 sigma: "2**-16"
-meta_learning_rate: "1e-10"
-mu_scaling_factor: 0.1
+meta_learning_rate: 0
+mu_scaling_factor: 1
 
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: Mu test
+name: test - almost all momentum
 mode: "offline"
 
 

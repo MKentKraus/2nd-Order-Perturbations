@@ -33,9 +33,9 @@ class PerturbNet(torch.nn.Module):
             dim = torch.ones(
                 x.dim(), dtype=torch.int8
             ).tolist()  # repeat requires a list/tuple of ints with all dimensions of the tensor
-            if self.pert_type.lower() == "ffd":
+            if "ffd" in self.pert_type.lower():
                 dim[0] = self.num_perts + 1
-            elif self.pert_type.lower() == "cfd":
+            elif "cfd" in self.pert_type.lower():
                 dim[0] = self.num_perts * 2
             x = x.repeat(dim)
         return self.network(x)
@@ -106,7 +106,7 @@ class PerturbNet(torch.nn.Module):
         output = self(data)
         batch_size = data.shape[0]
 
-        if self.pert_type.lower() == "ffd":
+        if "ffd" in self.pert_type.lower():
             loss_1 = loss_func(output[:batch_size], target, onehots)  # clean loss
             loss_2 = loss_func(
                 output[batch_size:],
@@ -114,7 +114,7 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
             loss_differential = loss_2 - loss_1.repeat(self.num_perts)
-        elif self.pert_type.lower() == "cfd":
+        elif "cfd" in self.pert_type.lower():
             half = self.num_perts * batch_size
             loss_1 = loss_func(
                 output[:half],
@@ -131,7 +131,7 @@ class PerturbNet(torch.nn.Module):
 
         loss_differential = loss_differential.view(
             self.num_perts, -1
-        )  # dim num_perts, batch sice
+        )  # dim num_perts, batch size
         normalization = self.get_normalization(self.network).unsqueeze(
             1
         )  # dim num_perts
@@ -139,6 +139,7 @@ class PerturbNet(torch.nn.Module):
         grad_scaling = (
             loss_differential * normalization
         )  # each perturbation should be multiplied by its normalization
+
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
 
         loss_1 = loss_1.sum().item()

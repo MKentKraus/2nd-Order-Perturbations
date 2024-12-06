@@ -44,10 +44,12 @@ class WPLinearFunc(torch.autograd.Function):
 
         w_noise = (
             dist_sampler(noise_shape) * weight_sigma.repeat(noise_shape[0], 1, 1)
-        ) + weight_mu.repeat(noise_shape[0], 1, 1) * mu_scaling * weight_sigma.repeat(
-            noise_shape[0], 1, 1
-        )
-        if pert_type.lower() == "ffd":
+        ) + weight_mu.repeat(noise_shape[0], 1, 1) * mu_scaling
+
+        b_noise = None
+
+        if "ffd" in pert_type.lower():
+
             assert batch_size > 0
             output[batch_size:] += WPLinearFunc.add_noise(
                 input[batch_size:], w_noise, sample_wise
@@ -56,23 +58,26 @@ class WPLinearFunc(torch.autograd.Function):
                 b_noise_shape = [noise_shape[0]] + list(biases.shape)
                 b_noise = (
                     dist_sampler(b_noise_shape) * bias_sigma.repeat(noise_shape[0], 1)
-                ) + bias_mu.repeat(noise_shape[0], 1)
+                ) + bias_mu.repeat(noise_shape[0], 1) * mu_scaling
 
                 if sample_wise:
                     output[batch_size:] += b_noise
                 else:
                     output[batch_size:] += torch.tile(b_noise, (batch_size, 1))
 
-        elif pert_type.lower() == "cfd":
+        elif "cfd" in pert_type.lower():
+
             half = batch_size * pert_num
             output[:half] += WPLinearFunc.add_noise(input[:half], w_noise, sample_wise)
             output[half:] += WPLinearFunc.add_noise(input[half:], -w_noise, sample_wise)
 
             if biases is not None:
                 b_noise_shape = [noise_shape[0]] + list(biases.shape)
+
                 b_noise = (
                     dist_sampler(b_noise_shape) * bias_sigma.repeat(noise_shape[0], 1)
-                ) + bias_mu.repeat(noise_shape[0], 1)
+                ) + bias_mu.repeat(noise_shape[0], 1) * mu_scaling
+
                 if sample_wise:
                     output[:half] += b_noise
                     output[half:] -= b_noise
@@ -115,7 +120,7 @@ class WPLinear(torch.nn.Linear):
     def __init__(
         self,
         *args,
-        pert_type: str = "forw",
+        pert_type: str = "ffd",
         dist_sampler: torch.distributions.Distribution = None,
         sigma,
         mu_scaling_factor,
@@ -133,30 +138,73 @@ class WPLinear(torch.nn.Linear):
         self.bias_diff = None
         self.num_perts = num_perts
         self.mu_scaling_factor = mu_scaling_factor
-        self.weight_sigma = torch.nn.parameter.Parameter(
-            torch.full(size=(self.weight.shape), fill_value=sigma, dtype=torch.float32),
-            requires_grad=True,
-        )
-        self.weight_mu = torch.nn.parameter.Parameter(
-            torch.zeros(size=(self.weight.shape), dtype=torch.float32),
-            requires_grad=True,
-        )
 
-        if self.bias is not None:
-            self.bias_sigma = torch.nn.parameter.Parameter(
+        if "meta" in pert_type.lower():
+            self.weight_sigma = torch.nn.parameter.Parameter(
                 torch.full(
-                    size=(self.bias.shape), fill_value=sigma, dtype=torch.float32
+                    size=(self.weight.shape), fill_value=sigma, dtype=torch.float32
                 ),
                 requires_grad=True,
             )
-
-            self.bias_mu = torch.nn.parameter.Parameter(
-                torch.zeros(size=(self.bias.shape), dtype=torch.float32),
+            self.weight_mu = torch.nn.parameter.Parameter(
+                torch.zeros(size=(self.weight.shape), dtype=torch.float32),
                 requires_grad=True,
             )
+
+            if self.bias is not None:
+                self.bias_sigma = torch.nn.parameter.Parameter(
+                    torch.full(
+                        size=(self.bias.shape), fill_value=sigma, dtype=torch.float32
+                    ),
+                    requires_grad=True,
+                )
+
+                self.bias_mu = torch.nn.parameter.Parameter(
+                    torch.zeros(size=(self.bias.shape), dtype=torch.float32),
+                    requires_grad=True,
+                )
+
         else:
-            self.bias_sigma = None
-            self.bias_mu = None
+            self.weight_sigma = torch.full(
+                size=(self.weight.shape),
+                fill_value=sigma,
+                dtype=torch.float32,
+                device="cuda:0",
+            )
+
+            self.weight_mu = torch.zeros(
+                size=(self.weight.shape),
+                dtype=torch.float32,
+                device="cuda:0",
+            )
+
+            self.grad_w_est = torch.zeros(
+                size=(self.weight.shape),
+                dtype=torch.float32,
+                device="cuda:0",
+            )
+
+            if self.bias is not None:
+                self.bias_sigma = torch.full(
+                    size=(self.bias.shape),
+                    fill_value=sigma,
+                    dtype=torch.float32,
+                    device="cuda:0",
+                )
+                self.bias_mu = torch.zeros(
+                    size=(self.bias.shape),
+                    dtype=torch.float32,
+                    device="cuda:0",
+                )
+
+                self.grad_b_est = torch.zeros(
+                    size=(self.bias.shape),
+                    dtype=torch.float32,
+                    device="cuda:0",
+                )
+            else:
+                self.bias_sigma = None
+                self.bias_mu = None
 
     def __str__(self):
         return "WPLinear"
@@ -166,9 +214,9 @@ class WPLinear(torch.nn.Linear):
         # A clean and noisy input are both processed by a layer to produce
         if self.training:
 
-            if self.pert_type.lower() == "ffd":
+            if "ffd" in self.pert_type.lower():
                 batch_size = int(input.shape[0] / (self.num_perts + 1))
-            elif self.pert_type.lower() == "cfd":
+            elif "cfd" in self.pert_type.lower():
                 batch_size = int(input.shape[0] / (self.num_perts * 2))
             (output, weight_diff, bias_diff) = WPLinearFunc().apply(
                 input,
@@ -191,20 +239,9 @@ class WPLinear(torch.nn.Linear):
             )
             self.bias_diff = bias_diff  # dims are number of perturbations, outputs
 
-            if self.sample_wise:
-                noise_dim = batch_size
-            else:
-                noise_dim = self.num_perts
-
-            self.square_norm = torch.sum(
-                (self.weight_diff.reshape(noise_dim, -1)) ** 2, axis=1
-            )
-
+            self.square_norm = torch.sum(self.weight_diff**2, dim=(1, 2))
             if self.bias is not None:
-                self.square_norm += torch.sum(
-                    self.bias_diff.reshape(noise_dim, -1) ** 2, axis=1
-                )
-
+                self.square_norm += torch.sum(self.bias_diff**2, dim=1)
         else:  # Do not perturb if weights are not being trained.
             output = F.linear(input, self.weight, self.bias)
         return output
@@ -217,21 +254,19 @@ class WPLinear(torch.nn.Linear):
         # Scaling factor \in [batch, num_pert]
         # Weights \in [batch OR pert, out, in]
 
+        # print(torch.linalg.vector_norm(self.weight_diff))
+        # print(torch.linalg.vector_norm(scaling_factor))
         if self.sample_wise:
             scaled_weight_diff = (
                 scaling_factor[:, :, None, None] * self.weight_diff[:, None, :, :]
             )
+
         else:
             scaled_weight_diff = (
                 scaling_factor[:, :, None, None] * self.weight_diff[None, :, :, :]
             )
 
         self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0)
-
-        self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
-        self.weight_mu.grad = torch.div(
-            self.weight_mu.grad, torch.linalg.vector_norm(self.weight_mu.grad)
-        )
 
         if self.bias is not None:
             if self.sample_wise:
@@ -245,11 +280,34 @@ class WPLinear(torch.nn.Linear):
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
-            self.bias_mu.grad = -(self.bias.grad - self.bias_mu)
+        if "grad" in self.pert_type.lower():
 
-            self.bias_mu.grad = torch.div(
-                self.bias_mu.grad, torch.linalg.vector_norm(self.bias_mu.grad)
-            )
+            # print("old momentum")
+            # print(self.grad_w_est[1, 2])
+            # print("new estimate")
+
+            # print(self.weight.grad[1, 2])
+            self.grad_w_est = (
+                1 - self.mu_scaling_factor
+            ) * self.grad_w_est + self.mu_scaling_factor * self.weight.grad
+
+            # print("new momentum")
+            self.weight.grad = self.grad_w_est.clone()
+            # print(self.weight.grad[1, 2])
+            # print(self.weight[1, 2])
+
+            if self.bias is not None:
+                self.grad_b_est = (
+                    1 - self.mu_scaling_factor
+                ) * self.grad_b_est + self.mu_scaling_factor * self.bias.grad
+
+                self.bias.grad = self.grad_b_est.clone()
+
+        elif "meta" in self.pert_type.lower():
+            self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
+
+            if self.bias is not None:
+                self.bias_mu.grad = -(self.bias.grad - self.bias_mu)
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

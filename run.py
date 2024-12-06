@@ -25,7 +25,7 @@ def run(config) -> None:
         mode=config.mode,
     )
     print(cfg)
-
+    torch.set_printoptions(precision=10)
     if isinstance(config.learning_rate, float) or isinstance(config.learning_rate, int):
         lr = config.learning_rate
     else:
@@ -64,7 +64,7 @@ def run(config) -> None:
 
     # Define network
     network = None
-    if config.algorithm.lower() == "ffd" or config.algorithm.lower() == "cfd":
+    if "ffd" in config.algorithm.lower() or "cfd" in config.algorithm.lower():
         dist_sampler = utils.make_dist_sampler(sigma, config.distribution, device)
 
         model = torch.nn.Sequential(
@@ -87,7 +87,12 @@ def run(config) -> None:
             torch.nn.Linear(in_shape, out_shape, bias=config.bias),
         ).to(device)
 
-        network = PerturbNet(model, config.num_perts, config.algorithm, model_bp)
+        network = PerturbNet(
+            network=model,
+            num_perts=config.num_perts,
+            pert_type=config.algorithm,
+            BP_network=model_bp,
+        )
         regular_weights = []
         meta_weights = []
 
@@ -137,8 +142,8 @@ def run(config) -> None:
             fwd_optimizer = torch.optim.SGD(model.parameters(), lr)
         else:
             fwd_optimizer = torch.optim.SGD(regular_weights, lr)
-
-            meta_optimizer = torch.optim.SGD(meta_weights, meta_lr)
+            if "meta" in config.algorithm.lower():
+                meta_optimizer = torch.optim.SGD(meta_weights, meta_lr)
 
     # Define optimizers
 
