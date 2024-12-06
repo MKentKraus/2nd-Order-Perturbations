@@ -384,7 +384,6 @@ def next_epoch(
         loud_test,
         num_classes=num_classes,
     )
-
     metrics["test"]["loss"].append(test_metrics[0])
     metrics["test"]["acc"].append(test_metrics[1])
     if comp_angles:
@@ -400,7 +399,6 @@ def next_epoch(
         loud=False,
         num_classes=num_classes,
     )
-
     metrics["train"]["loss"].append(train_metrics[0])
     metrics["train"]["acc"].append(train_metrics[1])
 
@@ -417,12 +415,42 @@ def next_epoch(
         num_classes=num_classes,
     )
 
+    w = network.state_dict().get("network.1.weight")
+    w = torch.linalg.vector_norm(w) / torch.numel(w)
+
+    b = network.state_dict().get("network.1.bias")
+
+    b = torch.linalg.vector_norm(b) / torch.numel(b)
+
     if wandb is not None:
+
+        wandb.log(
+            {
+                "weights/learned weights scale": w,
+                "weights/learned biases scale": b,
+            },
+            step=epoch,
+        )
         if comp_angles:
             wandb.log(
-                {"angle/angle": test_metrics[2], "angle/OSE": train_results[2]},
+                {
+                    "angle/angle": test_metrics[2],
+                    "angle/OSE": train_results[-1],
+                },
                 step=epoch,
             )
+
+        if meta_optimizer is not None:
+            wandb.log(
+                {
+                    "weights/weight mu": train_results[2],
+                    "weights/bias mu": train_results[3],
+                    "weights/effective weights mu": train_results[2] * 1e-10,
+                    "weights/effective bias mu": train_results[3] * 1e-10,
+                },
+                step=epoch,
+            )
+
         if validation:
             wandb.log(
                 {
@@ -476,6 +504,8 @@ def train(
     i = 0
 
     model.train()
+    weight_mu = []
+    bias_mu = []
 
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
@@ -494,9 +524,40 @@ def train(
             i += 1
         else:
             loss = model.train_step(data, target, onehots, loss_func)
+        w = model.state_dict().get("network.1.weight")
+        b = model.state_dict().get("network.1.bias")
+
+        # print("make sure the weight is the same")
+        # print(w[1, 2])
+        # print("all weights before update")
+
+        # w = torch.linalg.vector_norm(w) / torch.numel(w)
+        # b = torch.linalg.vector_norm(b) / torch.numel(b)
+        # print(b)
+        # print(w)
         optimizer.step()
 
+        w = model.state_dict().get("network.1.weight")
+        b = model.state_dict().get("network.1.bias")
+        # print("weight after updating")
+        # print(w[1, 2])
+        # print("all weights after update")
+
+        w = torch.linalg.vector_norm(w) / torch.numel(w)
+        b = torch.linalg.vector_norm(b) / torch.numel(b)
+
+        # print(b)
+        # print(w)
         if meta_optimizer is not None:
+            weight_mu.append(model.state_dict().get("network.1.weight_mu"))
+            weight_mu[-1] = torch.linalg.vector_norm(weight_mu[-1]) / torch.numel(
+                weight_mu[-1]
+            )
+
+            bias_mu.append(model.state_dict().get("network.1.bias_mu"))
+            bias_mu[-1] = torch.linalg.vector_norm(bias_mu[-1]) / torch.numel(
+                bias_mu[-1]
+            )
             meta_optimizer.step()
 
         if (batch_idx % log_interval == 0) and loud:
@@ -511,7 +572,19 @@ def train(
             )
 
     loss /= len(train_loader.dataset)
-    train_results = [loss, (100.0 * batch_idx / len(train_loader.dataset))]
+
+    train_results = [
+        loss,
+        (100.0 * batch_idx / len(train_loader.dataset)),
+        weight_mu,
+        bias_mu,
+    ]
+
+    if meta_optimizer is not None:
+        weight_mu = torch.Tensor(weight_mu).to(device).mean()
+        bias_mu = torch.Tensor(bias_mu).to(device).mean()
+        train_results.append(weight_mu)
+        train_results.append(bias_mu)
     if comp_angles:
         ose = (wp_loss[0] - wp_loss[1]) / (
             bp_loss[0] - bp_loss[1] + 1e-16
