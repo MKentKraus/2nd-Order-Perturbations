@@ -524,30 +524,9 @@ def train(
             i += 1
         else:
             loss = model.train_step(data, target, onehots, loss_func)
-        w = model.state_dict().get("network.1.weight")
-        b = model.state_dict().get("network.1.bias")
 
-        # print("make sure the weight is the same")
-        # print(w[1, 2])
-        # print("all weights before update")
-
-        # w = torch.linalg.vector_norm(w) / torch.numel(w)
-        # b = torch.linalg.vector_norm(b) / torch.numel(b)
-        # print(b)
-        # print(w)
         optimizer.step()
 
-        w = model.state_dict().get("network.1.weight")
-        b = model.state_dict().get("network.1.bias")
-        # print("weight after updating")
-        # print(w[1, 2])
-        # print("all weights after update")
-
-        w = torch.linalg.vector_norm(w) / torch.numel(w)
-        b = torch.linalg.vector_norm(b) / torch.numel(b)
-
-        # print(b)
-        # print(w)
         if meta_optimizer is not None:
             weight_mu.append(model.state_dict().get("network.1.weight_mu"))
             weight_mu[-1] = torch.linalg.vector_norm(weight_mu[-1]) / torch.numel(
@@ -573,12 +552,7 @@ def train(
 
     loss /= len(train_loader.dataset)
 
-    train_results = [
-        loss,
-        (100.0 * batch_idx / len(train_loader.dataset)),
-        weight_mu,
-        bias_mu,
-    ]
+    train_results = [loss, (100.0 * batch_idx / len(train_loader.dataset))]
 
     if meta_optimizer is not None:
         weight_mu = torch.Tensor(weight_mu).to(device).mean()

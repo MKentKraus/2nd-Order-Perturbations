@@ -138,6 +138,7 @@ class WPLinear(torch.nn.Linear):
         self.bias_diff = None
         self.num_perts = num_perts
         self.mu_scaling_factor = mu_scaling_factor
+        self.first_gradient = True
 
         if "meta" in pert_type.lower():
             self.weight_sigma = torch.nn.parameter.Parameter(
@@ -163,7 +164,6 @@ class WPLinear(torch.nn.Linear):
                     torch.zeros(size=(self.bias.shape), dtype=torch.float32),
                     requires_grad=True,
                 )
-
         else:
             self.weight_sigma = torch.full(
                 size=(self.weight.shape),
@@ -287,27 +287,46 @@ class WPLinear(torch.nn.Linear):
             # print("new estimate")
 
             # print(self.weight.grad[1, 2])
-            self.grad_w_est = (
-                1 - self.mu_scaling_factor
-            ) * self.grad_w_est + self.mu_scaling_factor * self.weight.grad
 
-            # print("new momentum")
-            self.weight.grad = self.grad_w_est.clone()
-            # print(self.weight.grad[1, 2])
-            # print(self.weight[1, 2])
+            if self.first_gradient:
+                self.grad_w_est = self.weight.grad
+                if self.bias is not None:
+                    self.grad_b_est = self.bias.grad
+                self.first_gradient = False
 
-            if self.bias is not None:
-                self.grad_b_est = (
-                    1 - self.mu_scaling_factor
-                ) * self.grad_b_est + self.mu_scaling_factor * self.bias.grad
+            else:
+                self.grad_w_est = (
+                    self.mu_scaling_factor
+                ) * self.grad_w_est + self.weight.grad
 
-                self.bias.grad = self.grad_b_est.clone()
+                self.weight.grad = self.grad_w_est
+                # print(self.weight.grad[1, 2])
+                # print(self.weight[1, 2])
+
+                if self.bias is not None:
+                    self.grad_b_est = (
+                        self.mu_scaling_factor
+                    ) * self.grad_b_est + self.bias.grad
+
+                    self.bias.grad = self.grad_b_est
 
         elif "meta" in self.pert_type.lower():
-            self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
 
-            if self.bias is not None:
-                self.bias_mu.grad = -(self.bias.grad - self.bias_mu)
+            if self.first_gradient:
+                self.weight_mu = torch.nn.parameter.Parameter(
+                    self.weight.grad, requires_grad=True
+                )
+                if self.bias is not None:
+                    self.bias_mu = torch.nn.parameter.Parameter(
+                        self.bias.grad, requires_grad=True
+                    )
+                self.first_gradient = False
+
+            else:
+                self.weight_mu.grad = -(self.weight.grad - self.weight_mu)
+
+                if self.bias is not None:
+                    self.bias_mu.grad = -(self.bias.grad - self.bias_mu)
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

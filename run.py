@@ -141,7 +141,9 @@ def run(config) -> None:
         if config.algorithm.lower() == "bp":
             fwd_optimizer = torch.optim.SGD(model.parameters(), lr)
         else:
-            fwd_optimizer = torch.optim.SGD(regular_weights, lr)
+            fwd_optimizer = torch.optim.SGD(
+                regular_weights, lr, momentum=config.momentum
+            )
             if "meta" in config.algorithm.lower():
                 meta_optimizer = torch.optim.SGD(meta_weights, meta_lr)
 
