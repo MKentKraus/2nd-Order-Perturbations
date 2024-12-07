@@ -384,6 +384,7 @@ def next_epoch(
         loud_test,
         num_classes=num_classes,
     )
+
     metrics["test"]["loss"].append(test_metrics[0])
     metrics["test"]["acc"].append(test_metrics[1])
     if comp_angles:
@@ -440,13 +441,11 @@ def next_epoch(
                 step=epoch,
             )
 
-        if meta_optimizer is not None:
+        if meta_optimizer:
             wandb.log(
                 {
                     "weights/weight mu": train_results[2],
                     "weights/bias mu": train_results[3],
-                    "weights/effective weights mu": train_results[2] * 1e-10,
-                    "weights/effective bias mu": train_results[3] * 1e-10,
                 },
                 step=epoch,
             )
@@ -537,7 +536,6 @@ def train(
             bias_mu[-1] = torch.linalg.vector_norm(bias_mu[-1]) / torch.numel(
                 bias_mu[-1]
             )
-            meta_optimizer.step()
 
         if (batch_idx % log_interval == 0) and loud:
             print(
@@ -554,7 +552,7 @@ def train(
 
     train_results = [loss, (100.0 * batch_idx / len(train_loader.dataset))]
 
-    if meta_optimizer is not None:
+    if meta_optimizer:
         weight_mu = torch.Tensor(weight_mu).to(device).mean()
         bias_mu = torch.Tensor(bias_mu).to(device).mean()
         train_results.append(weight_mu)

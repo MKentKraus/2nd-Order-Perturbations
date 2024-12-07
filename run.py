@@ -79,6 +79,7 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
+                momentum=meta_lr,
             ),
         ).to(device)
 
@@ -126,7 +127,7 @@ def run(config) -> None:
 
     # Define optimizers
     fwd_optimizer = None
-    meta_optimizer = None
+    meta_optimizer = True if "meta" in config.algorithm.lower() else False
 
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -144,8 +145,6 @@ def run(config) -> None:
             fwd_optimizer = torch.optim.SGD(
                 regular_weights, lr, momentum=config.momentum
             )
-            if "meta" in config.algorithm.lower():
-                meta_optimizer = torch.optim.SGD(meta_weights, meta_lr)
 
     # Define optimizers
 
