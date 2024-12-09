@@ -127,7 +127,7 @@ def run(config) -> None:
 
     # Define optimizers
     fwd_optimizer = None
-    meta_optimizer = True if "meta" in config.algorithm.lower() else False
+    meta_optimizer = True if "meta" in config.algorithm.lower() else None
 
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)

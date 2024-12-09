@@ -200,11 +200,25 @@ class WPLinear(torch.nn.Linear):
 
             if self.bias is not None:
 
+                self.bias_sigma = torch.full(
+                    size=(self.bias.shape),
+                    fill_value=sigma,
+                    dtype=torch.float32,
+                    device="cuda:0",
+                )
+
                 self.grad_b_est = torch.zeros(
                     size=(self.bias.shape),
                     dtype=torch.float32,
                     device="cuda:0",
                 )
+
+                self.bias_mu = torch.zeros(
+                    size=(self.bias.shape),
+                    dtype=torch.float32,
+                    device="cuda:0",
+                )
+
             else:
                 self.bias_sigma = None
                 self.bias_mu = None
