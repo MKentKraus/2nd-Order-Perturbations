@@ -124,7 +124,7 @@ class WPLinear(torch.nn.Linear):
         dist_sampler: torch.distributions.Distribution = None,
         sigma,
         mu_scaling_factor,
-        momentum,
+        meta_lr,
         sample_wise: bool = False,
         num_perts: int = 1,
         **kwargs,
@@ -139,58 +139,46 @@ class WPLinear(torch.nn.Linear):
         self.bias_diff = None
         self.num_perts = num_perts
         self.mu_scaling_factor = mu_scaling_factor
-        self.momentum = momentum  # the meta learning rate. How much of the past gradient estimate is carried over as momentum
+        self.meta_lr = meta_lr  # the meta learning rate. How much of the past gradient estimate is carried over as momentum
         self.first_gradient = True
 
-        if "meta" in pert_type.lower():
+        self.weight_sigma = torch.full(
+            size=(self.weight.shape),
+            fill_value=sigma,
+            dtype=torch.float32,
+            device="cuda:0",
+        )
 
-            self.weight_sigma = torch.full(
+        self.register_buffer(
+            "weight_mu",
+            torch.zeros(
                 size=(self.weight.shape),
+                dtype=torch.float32,
+                device="cuda:0",
+            ),
+        )
+
+        if self.bias is not None:
+            self.bias_sigma = torch.full(
+                size=(self.bias.shape),
                 fill_value=sigma,
                 dtype=torch.float32,
                 device="cuda:0",
             )
 
             self.register_buffer(
-                "weight_mu",
+                "bias_mu",
                 torch.zeros(
-                    size=(self.weight.shape),
+                    size=(self.bias.shape),
                     dtype=torch.float32,
                     device="cuda:0",
                 ),
             )
-
-            if self.bias is not None:
-                self.bias_sigma = torch.full(
-                    size=(self.bias.shape),
-                    fill_value=sigma,
-                    dtype=torch.float32,
-                    device="cuda:0",
-                )
-
-                self.register_buffer(
-                    "bias_mu",
-                    torch.zeros(
-                        size=(self.bias.shape),
-                        dtype=torch.float32,
-                        device="cuda:0",
-                    ),
-                )
-            print(self.state_dict().keys())
-
         else:
-            self.weight_sigma = torch.full(
-                size=(self.weight.shape),
-                fill_value=sigma,
-                dtype=torch.float32,
-                device="cuda:0",
-            )
+            self.bias_sigma = None
+            self.bias_mu = None
 
-            self.weight_mu = torch.zeros(
-                size=(self.weight.shape),
-                dtype=torch.float32,
-                device="cuda:0",
-            )
+        if "grad" in self.pert_type.lower():
 
             self.grad_w_est = torch.zeros(
                 size=(self.weight.shape),
@@ -200,28 +188,11 @@ class WPLinear(torch.nn.Linear):
 
             if self.bias is not None:
 
-                self.bias_sigma = torch.full(
-                    size=(self.bias.shape),
-                    fill_value=sigma,
-                    dtype=torch.float32,
-                    device="cuda:0",
-                )
-
                 self.grad_b_est = torch.zeros(
                     size=(self.bias.shape),
                     dtype=torch.float32,
                     device="cuda:0",
                 )
-
-                self.bias_mu = torch.zeros(
-                    size=(self.bias.shape),
-                    dtype=torch.float32,
-                    device="cuda:0",
-                )
-
-            else:
-                self.bias_sigma = None
-                self.bias_mu = None
 
     def __str__(self):
         return "WPLinear"
@@ -297,13 +268,28 @@ class WPLinear(torch.nn.Linear):
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
+        elif "meta" in self.pert_type.lower():
+
+            if self.first_gradient:
+                self.weight_mu = self.weight.grad
+
+                if self.bias is not None:
+                    self.bias_mu = self.bias.grad
+                self.first_gradient = False
+
+            else:
+                self.weight_mu = (
+                    self.weight_mu * self.meta_lr
+                    + (1 - self.meta_lr) * self.weight.grad
+                )
+
+                if self.bias is not None:
+                    self.bias_mu = (
+                        self.bias_mu * self.meta_lr
+                        + (1 - self.meta_lr) * self.bias.grad
+                    )
+
         if "grad" in self.pert_type.lower():
-
-            # print("old momentum")
-            # print(self.grad_w_est[1, 2])
-            # print("new estimate")
-
-            # print(self.weight.grad[1, 2])
 
             if self.first_gradient:
                 self.grad_w_est = self.weight.grad
@@ -317,8 +303,6 @@ class WPLinear(torch.nn.Linear):
                 ) * self.grad_w_est + self.weight.grad
 
                 self.weight.grad = self.grad_w_est
-                # print(self.weight.grad[1, 2])
-                # print(self.weight[1, 2])
 
                 if self.bias is not None:
                     self.grad_b_est = (
@@ -326,21 +310,6 @@ class WPLinear(torch.nn.Linear):
                     ) * self.grad_b_est + self.bias.grad
 
                     self.bias.grad = self.grad_b_est
-
-        elif "meta" in self.pert_type.lower():
-
-            if self.first_gradient:
-                self.weight_mu = self.weight.grad
-
-                if self.bias is not None:
-                    self.bias_mu = self.bias.grad
-                self.first_gradient = False
-
-            else:
-                self.weight_mu = self.weight_mu * self.momentum + self.weight.grad
-
-                if self.bias is not None:
-                    self.bias_mu = self.bias_mu * self.momentum + self.bias.grad
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"

@@ -36,13 +36,6 @@ def run(config) -> None:
     else:
         sigma = eval(config.sigma)
 
-    if isinstance(config.meta_learning_rate, float) or isinstance(
-        config.meta_learning_rate, int
-    ):
-        meta_lr = config.meta_learning_rate
-    else:
-        meta_lr = eval(config.meta_learning_rate)
-
     if isinstance(config.mu_scaling_factor, float) or isinstance(
         config.mu_scaling_factor, int
     ):
@@ -71,6 +64,58 @@ def run(config) -> None:
             torch.nn.Flatten(),
             WPLinear(
                 in_shape,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                mu_scaling_factor=mu_scaling_factor,
+                sample_wise=False,
+                num_perts=config.num_perts,
+                meta_lr=config.momentum,
+            ),
+            torch.nn.LeakyReLU(),
+            WPLinear(
+                500,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                mu_scaling_factor=mu_scaling_factor,
+                sample_wise=False,
+                num_perts=config.num_perts,
+                meta_lr=config.momentum,
+            ),
+            torch.nn.LeakyReLU(),
+            WPLinear(
+                500,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                mu_scaling_factor=mu_scaling_factor,
+                sample_wise=False,
+                num_perts=config.num_perts,
+                meta_lr=config.momentum,
+            ),
+            torch.nn.LeakyReLU(),
+            WPLinear(
+                500,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                mu_scaling_factor=mu_scaling_factor,
+                sample_wise=False,
+                num_perts=config.num_perts,
+                meta_lr=config.momentum,
+            ),
+            torch.nn.LeakyReLU(),
+            WPLinear(
+                500,
                 out_shape,
                 bias=config.bias,
                 pert_type=config.algorithm,
@@ -79,13 +124,21 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                momentum=meta_lr,
+                meta_lr=config.momentum,
             ),
         ).to(device)
 
         model_bp = torch.nn.Sequential(
             torch.nn.Flatten(),
-            torch.nn.Linear(in_shape, out_shape, bias=config.bias),
+            torch.nn.Linear(in_shape, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, out_shape),
         ).to(device)
 
         network = PerturbNet(
@@ -118,7 +171,15 @@ def run(config) -> None:
 
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
-            torch.nn.Linear(in_shape, out_shape),
+            torch.nn.Linear(in_shape, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, 500),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(500, out_shape),
         ).to(device)
 
         network = BPNet(model)
@@ -140,10 +201,18 @@ def run(config) -> None:
         # If WP and meta and angles, network. regular params and meta_weights
 
         if config.algorithm.lower() == "bp":
-            fwd_optimizer = torch.optim.SGD(model.parameters(), lr)
+            fwd_optimizer = torch.optim.SGD(
+                model.parameters(),
+                lr,
+                momentum=config.momentum,
+                dampening=config.momentum if config.dampening else 0,
+            )
         else:
             fwd_optimizer = torch.optim.SGD(
-                regular_weights, lr, momentum=config.momentum
+                regular_weights,
+                lr,
+                momentum=config.momentum if config.momentum_switch else 0,
+                dampening=config.momentum if config.dampening else 0,
             )
 
     # Define optimizers

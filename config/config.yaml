@@ -9,25 +9,29 @@ device: "cuda:0"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: False
+comp_angles: True
 validation: True
 
 #Model options
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
-learning_rate: "2**-25" 
-num_perts: 1
-algorithm: "Grad_CFD" #ffd, cfd or bp
-sigma: "2**-16"
+learning_rate: "2**-18"
+num_perts: 4
+algorithm: "CFD" #ffd, cfd or bp
+sigma: "2**-20"
 meta_learning_rate: 0
-mu_scaling_factor: 1
+mu_scaling_factor: 0
+momentum: 0
+dampening: False
+momentum_switch: True
+
 
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: test - almost all momentum
-mode: "offline"
+name: 
+mode: "online"
 
 
 
