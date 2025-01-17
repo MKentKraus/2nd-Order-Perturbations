@@ -26,10 +26,18 @@ def run(config) -> None:
     )
     print(cfg)
     torch.set_printoptions(precision=10)
+
     if isinstance(config.learning_rate, float) or isinstance(config.learning_rate, int):
         lr = config.learning_rate
     else:
         lr = eval(config.learning_rate)
+
+    if isinstance(config.meta_learning_rate, float) or isinstance(
+        config.meta_learning_rate, int
+    ):
+        meta_learning_rate = config.meta_learning_rate
+    else:
+        meta_learning_rate = eval(config.meta_learning_rate)
 
     if isinstance(config.sigma, float) or isinstance(config.sigma, int):
         sigma = config.sigma
@@ -72,7 +80,7 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
+                meta_lr=config.meta_learning_rate,
             ),
             torch.nn.LeakyReLU(),
             WPLinear(
@@ -85,7 +93,7 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
+                meta_lr=config.meta_learning_rate,
             ),
             torch.nn.LeakyReLU(),
             WPLinear(
@@ -98,7 +106,7 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
+                meta_lr=config.meta_learning_rate,
             ),
             torch.nn.LeakyReLU(),
             WPLinear(
@@ -111,7 +119,7 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
+                meta_lr=config.meta_learning_rate,
             ),
             torch.nn.LeakyReLU(),
             WPLinear(
@@ -124,7 +132,7 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
+                meta_lr=config.meta_learning_rate,
             ),
         ).to(device)
 
@@ -211,7 +219,7 @@ def run(config) -> None:
             fwd_optimizer = torch.optim.SGD(
                 regular_weights,
                 lr,
-                momentum=config.momentum if config.momentum_switch else 0,
+                momentum=config.momentum,
                 dampening=config.momentum if config.dampening else 0,
             )
 

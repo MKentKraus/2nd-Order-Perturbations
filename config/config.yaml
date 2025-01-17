@@ -1,5 +1,5 @@
 #Setup 
-nb_epochs: 100
+nb_epochs: 1000
 bias: True
 dataset: "CIFAR10"
 batch_size: 128
@@ -16,21 +16,20 @@ validation: True
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
-learning_rate: "2**-18"
-num_perts: 4
+learning_rate: "2**-21"
+num_perts: 1
 algorithm: "CFD" #ffd, cfd or bp
-sigma: "2**-20"
+sigma: "2**-25"
 meta_learning_rate: 0
 mu_scaling_factor: 0
 momentum: 0
 dampening: False
-momentum_switch: True
 
 
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: 
+name: Long CFD 5 layer test
 mode: "online"
 
 

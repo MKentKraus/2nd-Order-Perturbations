@@ -1,16 +1,20 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name:  5-layer WP sweep, over learning rates, without mean learning, with momentum
+name:  5-layer default WP sweep over learning rates (hidden layers of 500)
 method: grid
 metric:
   goal: maximize
   name: validation/acc
 parameters:
+
+parameters:
     learning_rate:
-        values: [ "2**-10", "2**-11",    "2**-12", "2**-13", "2**-14",    "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
+        values: [ "2**-10", "2**-11",   "2**-12", "2**-13", "2**-14",  "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
+    meta_learning_rate:
+        values: 0
     algorithm:
-        values: ["FFD", "CFD"]
+        values: ["CFD", "FFD"]
     num_perts:
         values: [1, 4]
     sigma:
@@ -25,14 +29,10 @@ parameters:
         value: "CIFAR10"
     validation: 
         value: True
-    momentum_switch:
-        value: True
     momentum: 
-        values: [0, 0.1, 0.5, 0.8, 0.9, 0.99]
+        value: 0
     dampening:
-        values: [True, False] 
-
-
+        value: False
 command:
   - ${env}
   - python
