@@ -113,7 +113,7 @@ class PerturbNet(torch.nn.Module):
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
-            loss_differential = loss_2 - loss_1.repeat(self.num_perts)
+            Fd = loss_2 - loss_1.repeat(self.num_perts)  # 1st order finite difference
         elif "cfd" in self.pert_type.lower():
             half = self.num_perts * batch_size
             loss_1 = loss_func(
@@ -127,17 +127,41 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
 
-            loss_differential = loss_1 - loss_2
+            Fd = loss_1 - loss_2
 
-        loss_differential = loss_differential.view(
-            self.num_perts, -1
-        )  # dim num_perts, batch size
+        elif "2nd_order" in self.pert_type.lower():
+
+            # need f(x), f(x+h), f(x-h), f(x+2h) and 2f (x + h). Of these, only the first four need to be stored.
+
+            third = self.num_perts * batch_size
+            loss_1 = loss_func(  # f(x)
+                output[:third],
+                target.repeat(self.num_perts),
+                onehots.repeat(self.num_perts, 1),
+            )
+            loss_2 = loss_func(  # f(x+h)
+                output[third : 2 * third],
+                target.repeat(self.num_perts),
+                onehots.repeat(self.num_perts, 1),
+            )
+
+            loss_3 = loss_func(  # f(x-h)
+                output[2 * third :],
+                target.repeat(self.num_perts),
+                onehots.repeat(self.num_perts, 1),
+            )
+
+            Fd_2nd = loss_2 + loss_3 - 2 * loss_1
+            Fd_1st = loss_2 - loss_3
+            Fd = Fd_1st / Fd_2nd
+
+        Fd = Fd.view(self.num_perts, -1)  # dim num_perts, batch size
         normalization = self.get_normalization(self.network).unsqueeze(
             1
         )  # dim num_perts
 
         grad_scaling = (
-            loss_differential * normalization
+            Fd * normalization
         )  # each perturbation should be multiplied by its normalization
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)

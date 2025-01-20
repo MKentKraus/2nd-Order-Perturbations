@@ -20,14 +20,14 @@ class WPLinearFunc(torch.autograd.Function):
         pert_type,
         dist_sampler,
         sample_wise,
-        pert_num,
+        num_perts,
         mu_scaling,
         batch_size,
     ):
 
         if sample_wise:
-            assert pert_num == 1, "Don't use multiple perturbations for a fixed noise"
-        assert pert_num > 0, "Number of perturbations should never be zero"
+            assert num_perts == 1, "Don't use multiple perturbations for a fixed noise"
+        assert num_perts > 0, "Number of perturbations should never be zero"
 
         output = torch.mm(input, weights.t())
         if biases is not None:
@@ -38,7 +38,7 @@ class WPLinearFunc(torch.autograd.Function):
         ):  # Whether the noise is unique or shared for each element of the batch, determined by sample_wise
             noise_shape = batch_size
         else:
-            noise_shape = pert_num
+            noise_shape = num_perts
 
         noise_shape = [noise_shape] + list(weights.shape)
 
@@ -67,7 +67,7 @@ class WPLinearFunc(torch.autograd.Function):
 
         elif "cfd" in pert_type.lower():
 
-            half = batch_size * pert_num
+            half = batch_size * num_perts
             output[:half] += WPLinearFunc.add_noise(input[:half], w_noise, sample_wise)
             output[half:] += WPLinearFunc.add_noise(input[half:], -w_noise, sample_wise)
 
@@ -85,6 +85,34 @@ class WPLinearFunc(torch.autograd.Function):
                     output[:half] += torch.tile(b_noise, (batch_size, 1))
                     output[half:] -= torch.tile(b_noise, (batch_size, 1))
 
+        elif "2ndorder" in pert_type.lower():
+            # need f(x), f(x+h), f(x-h), f(x+2h) and 2f (x + h). Of these, only the first four need to be stored.
+            third = batch_size * num_perts
+
+            output[third : 2 * third] += WPLinearFunc.add_noise(
+                input[:half], w_noise, sample_wise
+            )  # f(x+h)
+            output[2 * third :] += WPLinearFunc.add_noise(
+                input[half:], -w_noise, sample_wise
+            )  # f(x-h)
+
+            if biases is not None:
+                b_noise_shape = [noise_shape[0]] + list(biases.shape)
+
+                b_noise = (
+                    dist_sampler(b_noise_shape) * bias_sigma.repeat(noise_shape[0], 1)
+                ) + bias_mu.repeat(noise_shape[0], 1) * mu_scaling
+
+                if sample_wise:
+                    output[third : 2 * third] += b_noise
+                    output[2 * third :] -= b_noise
+
+                else:
+                    output[third : 2 * third] += torch.tile(b_noise, (batch_size, 1))
+                    output[2 * third : 3 * third] -= torch.tile(
+                        b_noise, (batch_size, 1)
+                    )
+
         else:
             raise ValueError("Other perturbation types not yet implemented.")
 
@@ -100,12 +128,12 @@ class WPLinearFunc(torch.autograd.Function):
             ), "Shape of perturbations should be same as inputs!"
             outputs = torch.einsum("noi,ni->no", noisy_weights[0], inputs)
         else:
-            pert_num = noisy_weights.shape[0]
+            num_perts = noisy_weights.shape[0]
             elements_per_batch = int(inputs.shape[0] / noisy_weights.shape[0])
-            reshaped_inputs = inputs.view(pert_num, elements_per_batch, -1)
+            reshaped_inputs = inputs.view(num_perts, elements_per_batch, -1)
             outputs = torch.einsum(
                 "boi,bni->bno", noisy_weights, reshaped_inputs
-            ).reshape(pert_num * elements_per_batch, -1)
+            ).reshape(num_perts * elements_per_batch, -1)
 
         return outputs
 
@@ -268,7 +296,7 @@ class WPLinear(torch.nn.Linear):
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
-        elif "meta" in self.pert_type.lower():
+        if "meta" in self.pert_type.lower():
 
             if self.first_gradient:
                 self.weight_mu = self.weight.grad
