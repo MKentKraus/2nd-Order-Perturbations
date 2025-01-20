@@ -268,7 +268,7 @@ class WPLinear(torch.nn.Linear):
 
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
-        elif "meta" in self.pert_type.lower():
+        if "meta" in self.pert_type.lower():
 
             if self.first_gradient:
                 self.weight_mu = self.weight.grad
@@ -289,7 +289,7 @@ class WPLinear(torch.nn.Linear):
                         + (1 - self.meta_lr) * self.bias.grad
                     )
 
-        if "grad" in self.pert_type.lower():
+        elif "grad" in self.pert_type.lower():
 
             if self.first_gradient:
                 self.grad_w_est = self.weight.grad
