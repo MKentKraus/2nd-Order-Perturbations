@@ -69,9 +69,11 @@ class PerturbNet(torch.nn.Module):
 
     def get_normalization(self, network):
         num_params, normalizer = self.get_network_noise_normalizers(network)
-        normalization = num_params / normalizer
 
-        return normalization
+        normalization_1st = num_params / normalizer
+        normalization_2nd = num_params / (normalizer * normalizer)
+
+        return normalization_1st, normalization_2nd
 
     def compare_BP(self, data, target, onehots, loss_func, load_weights=True):
         """Compare a weight perturbation update to a backpropagation update"""
@@ -151,23 +153,23 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
 
-            Fd_2nd = loss_2 + loss_3 - 2 * loss_1.repeat(self.num_perts)
+            Fd_2nd = loss_2 - 2 * loss_1.repeat(self.num_perts) + loss_3
             Fd_2nd = Fd_2nd.view(self.num_perts, -1)
 
             Fd_1st = loss_2 - loss_3
 
         Fd_1st = Fd_1st.view(self.num_perts, -1)  # dim num_perts, batch size
-        normalization = self.get_normalization(self.network).unsqueeze(
-            1
+        normalization_1st, normalization_2nd = self.get_normalization(
+            self.network
         )  # dim num_perts
 
         if "2nd_order" in self.pert_type.lower():
-            grad_scaling = (
-                Fd_1st / (Fd_2nd) * normalization
+            grad_scaling = (Fd_1st * normalization_1st.unsqueeze(1)) / (
+                Fd_2nd * normalization_2nd.unsqueeze(1)
             )  # each perturbation should be multiplied by its normalization
         else:
-            grad_scaling = (
-                Fd_1st * normalization
+            grad_scaling = Fd_1st * normalization_1st.unsqueeze(
+                1
             )  # each perturbation should be multiplied by its normalization
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
