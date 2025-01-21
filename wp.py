@@ -85,15 +85,15 @@ class WPLinearFunc(torch.autograd.Function):
                     output[:half] += torch.tile(b_noise, (batch_size, 1))
                     output[half:] -= torch.tile(b_noise, (batch_size, 1))
 
-        elif "2ndorder" in pert_type.lower():
+        elif "2nd_order" in pert_type.lower():
             # need f(x), f(x+h), f(x-h), f(x+2h) and 2f (x + h). Of these, only the first four need to be stored.
-            third = batch_size * num_perts
+            half = batch_size * num_perts
 
-            output[third : 2 * third] += WPLinearFunc.add_noise(
-                input[:half], w_noise, sample_wise
+            output[batch_size : batch_size + half] += WPLinearFunc.add_noise(
+                input[batch_size : batch_size + half], w_noise, sample_wise
             )  # f(x+h)
-            output[2 * third :] += WPLinearFunc.add_noise(
-                input[half:], -w_noise, sample_wise
+            output[batch_size + half :] += WPLinearFunc.add_noise(
+                input[batch_size + half :], -w_noise, sample_wise
             )  # f(x-h)
 
             if biases is not None:
@@ -104,14 +104,14 @@ class WPLinearFunc(torch.autograd.Function):
                 ) + bias_mu.repeat(noise_shape[0], 1) * mu_scaling
 
                 if sample_wise:
-                    output[third : 2 * third] += b_noise
-                    output[2 * third :] -= b_noise
+                    output[batch_size : batch_size + half] += b_noise
+                    output[batch_size + half :] -= b_noise
 
                 else:
-                    output[third : 2 * third] += torch.tile(b_noise, (batch_size, 1))
-                    output[2 * third : 3 * third] -= torch.tile(
+                    output[batch_size : batch_size + half] += torch.tile(
                         b_noise, (batch_size, 1)
                     )
+                    output[batch_size + half :] -= torch.tile(b_noise, (batch_size, 1))
 
         else:
             raise ValueError("Other perturbation types not yet implemented.")
@@ -234,6 +234,8 @@ class WPLinear(torch.nn.Linear):
                 batch_size = int(input.shape[0] / (self.num_perts + 1))
             elif "cfd" in self.pert_type.lower():
                 batch_size = int(input.shape[0] / (self.num_perts * 2))
+            elif "2nd_order" in self.pert_type.lower():
+                batch_size = int(input.shape[0] / (self.num_perts * 3))
             (output, weight_diff, bias_diff) = WPLinearFunc().apply(
                 input,
                 self.weight,

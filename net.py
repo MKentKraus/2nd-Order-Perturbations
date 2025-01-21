@@ -37,6 +37,8 @@ class PerturbNet(torch.nn.Module):
                 dim[0] = self.num_perts + 1
             elif "cfd" in self.pert_type.lower():
                 dim[0] = self.num_perts * 2
+            elif "2nd_order" in self.pert_type.lower():
+                dim[0] = self.num_perts * 2 + 1
             x = x.repeat(dim)
         return self.network(x)
 
@@ -113,7 +115,9 @@ class PerturbNet(torch.nn.Module):
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
-            Fd = loss_2 - loss_1.repeat(self.num_perts)  # 1st order finite difference
+            Fd_1st = loss_2 - loss_1.repeat(
+                self.num_perts
+            )  # 1st order finite difference
         elif "cfd" in self.pert_type.lower():
             half = self.num_perts * batch_size
             loss_1 = loss_func(
@@ -127,42 +131,44 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
 
-            Fd = loss_1 - loss_2
+            Fd_1st = loss_1 - loss_2
 
         elif "2nd_order" in self.pert_type.lower():
 
             # need f(x), f(x+h), f(x-h), f(x+2h) and 2f (x + h). Of these, only the first four need to be stored.
 
-            third = self.num_perts * batch_size
-            loss_1 = loss_func(  # f(x)
-                output[:third],
-                target.repeat(self.num_perts),
-                onehots.repeat(self.num_perts, 1),
-            )
+            half = self.num_perts * batch_size
+            loss_1 = loss_func(output[:batch_size], target, onehots)  # f(x)
             loss_2 = loss_func(  # f(x+h)
-                output[third : 2 * third],
+                output[batch_size : batch_size + half],
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
 
             loss_3 = loss_func(  # f(x-h)
-                output[2 * third :],
+                output[batch_size + half :],
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
 
             Fd_2nd = loss_2 + loss_3 - 2 * loss_1
-            Fd_1st = loss_2 - loss_3
-            Fd = Fd_1st / Fd_2nd
+            Fd_2nd = Fd_2nd.view(self.num_perts, -1)
 
-        Fd = Fd.view(self.num_perts, -1)  # dim num_perts, batch size
+            Fd_1st = loss_2 - loss_3
+
+        Fd_1st = Fd_1st.view(self.num_perts, -1)  # dim num_perts, batch size
         normalization = self.get_normalization(self.network).unsqueeze(
             1
         )  # dim num_perts
 
-        grad_scaling = (
-            Fd * normalization
-        )  # each perturbation should be multiplied by its normalization
+        if "2nd_order" in self.pert_type.lower():
+            grad_scaling = (
+                Fd_1st / (Fd_2nd) * normalization
+            )  # each perturbation should be multiplied by its normalization
+        else:
+            grad_scaling = (
+                Fd_1st * normalization
+            )  # each perturbation should be multiplied by its normalization
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
 

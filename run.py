@@ -57,65 +57,17 @@ def run(config) -> None:
 
     # Define network
     network = None
-    if "ffd" in config.algorithm.lower() or "cfd" in config.algorithm.lower():
+    if (
+        "ffd" in config.algorithm.lower()
+        or "2nd_order" in config.algorithm.lower()
+        or "cfd" in config.algorithm.lower()
+    ):
         dist_sampler = utils.make_dist_sampler(sigma, config.distribution, device)
 
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             WPLinear(
                 in_shape,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                sample_wise=False,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-            ),
-            torch.nn.LeakyReLU(),
-            WPLinear(
-                500,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                sample_wise=False,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-            ),
-            torch.nn.LeakyReLU(),
-            WPLinear(
-                500,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                sample_wise=False,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-            ),
-            torch.nn.LeakyReLU(),
-            WPLinear(
-                500,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                sample_wise=False,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-            ),
-            torch.nn.LeakyReLU(),
-            WPLinear(
-                500,
                 out_shape,
                 bias=config.bias,
                 pert_type=config.algorithm,
@@ -130,15 +82,7 @@ def run(config) -> None:
 
         model_bp = torch.nn.Sequential(
             torch.nn.Flatten(),
-            torch.nn.Linear(in_shape, 500),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(500, 500),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(500, 500),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(500, 500),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(500, out_shape),
+            torch.nn.Linear(in_shape, out_shape),
         ).to(device)
 
         network = PerturbNet(
