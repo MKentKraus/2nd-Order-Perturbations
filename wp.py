@@ -235,7 +235,7 @@ class WPLinear(torch.nn.Linear):
             elif "cfd" in self.pert_type.lower():
                 batch_size = int(input.shape[0] / (self.num_perts * 2))
             elif "2nd_order" in self.pert_type.lower():
-                batch_size = int(input.shape[0] / (self.num_perts * 3))
+                batch_size = int(input.shape[0] / (self.num_perts * 2 + 1))
             (output, weight_diff, bias_diff) = WPLinearFunc().apply(
                 input,
                 self.weight,
