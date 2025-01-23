@@ -234,32 +234,53 @@ def run(config) -> None:
         loss_func = (
             lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
         )
-    with tqdm(range(config.nb_epochs)) as t:
-        for e in t:
 
-            metrics = utils.next_epoch(
-                network,
-                metrics,
-                device,
-                fwd_optimizer,
-                meta_optimizer,
-                test_loader,
-                train_loader,
-                loss_func,
-                e,
-                loud_test=config.loud_test,
-                loud_train=config.loud_train,
-                comp_angles=config.comp_angles,
-                validation=config.validation,
-                wandb=wandb,
-                num_classes=out_shape,
-            )
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CUDA,
+            torch.profiler.ProfilerActivity.CPU,
+        ],
+        record_shapes=True,
+        profile_memory=True,
+        with_flops=True,
+        schedule=torch.profiler.schedule(
+            skip_first=5,
+            wait=0,
+            warmup=2,
+            active=3,
+            repeat=4,
+        ),
+        on_trace_ready=utils.trace_handler,
+    ) as prof:
+        with tqdm(range(config.nb_epochs)) as t:
+            for e in t:
 
-            if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
-                metrics["train"]["loss"][-1]
-            ):
-                print("NaN detected, aborting training")
-                break
+                metrics = utils.next_epoch(
+                    network,
+                    metrics,
+                    device,
+                    fwd_optimizer,
+                    meta_optimizer,
+                    test_loader,
+                    train_loader,
+                    loss_func,
+                    e,
+                    loud_test=config.loud_test,
+                    loud_train=config.loud_train,
+                    comp_angles=config.comp_angles,
+                    validation=config.validation,
+                    wandb=wandb,
+                    num_classes=out_shape,
+                )
+
+                if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
+                    metrics["train"]["loss"][-1]
+                ):
+                    print("NaN detected, aborting training")
+                    break
+
+                prof.step()
+
     if config.comp_angles:
         wandb.log(
             {

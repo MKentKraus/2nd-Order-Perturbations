@@ -1,5 +1,5 @@
 #Setup 
-nb_epochs: 1000
+nb_epochs: 100
 bias: True
 dataset: "CIFAR10"
 batch_size: 128
@@ -29,7 +29,7 @@ dampening: False
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: Long CFD 5 layer test
+name: test if flops recording works
 mode: "online"
 
 

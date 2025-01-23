@@ -6,6 +6,7 @@ import numpy as np
 import torchvision
 import matplotlib.pyplot as plt
 import torchvision.transforms as v2
+import wandb
 
 
 def make_dist_sampler(
@@ -338,6 +339,13 @@ def construct_dataloaders(
         # elif ... # TODO: Add more datasets here and add to the assert above
 
     return train_loader, test_loader, in_shape, out_shape
+
+
+def trace_handler(p):
+    print(p.key_averages().table(sort_by="cuda_time_total", row_limit=5))
+    print("{:.2f} FLOPS (torch profile)".format(sum(k.flops for k in p.key_averages())))
+    flops = sum(k.flops for k in p.key_averages())
+    wandb.log("FLOPS", flops)
 
 
 def next_epoch(
