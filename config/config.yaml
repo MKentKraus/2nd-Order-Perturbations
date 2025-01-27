@@ -16,10 +16,10 @@ validation: True
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
-learning_rate: "2**-20"
+learning_rate: 1e-5
 num_perts: 1
 algorithm: "2nd_order" #ffd, cfd or bp
-sigma: "2**-5"
+sigma: 1e-3
 meta_learning_rate: 0
 mu_scaling_factor: 0
 momentum: 0

@@ -164,9 +164,14 @@ class PerturbNet(torch.nn.Module):
         )  # dim num_perts
 
         if "2nd_order" in self.pert_type.lower():
-            grad_scaling = (Fd_1st * normalization_1st.unsqueeze(1)) / (
-                Fd_2nd * normalization_2nd.unsqueeze(1)
-            )  # each perturbation should be multiplied by its normalization
+            if (
+                torch.sum(torch.abs(Fd_2nd)) > 1e-15
+            ):  # Only do second order step if it would not result in numerical instability
+                grad_scaling = (Fd_1st / Fd_2nd) * normalization_1st.unsqueeze(1)
+                # each perturbation should be multiplied by its normalization
+            else:
+                print("Instability, doing first order CFD step")
+                grad_scaling = Fd_1st * normalization_1st.unsqueeze(1)
         else:
             grad_scaling = Fd_1st * normalization_1st.unsqueeze(
                 1
