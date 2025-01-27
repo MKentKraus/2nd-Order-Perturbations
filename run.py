@@ -223,8 +223,6 @@ def run(config) -> None:
                 dampening=config.momentum if config.dampening else 0,
             )
 
-    # Define optimizers
-
     # Choose Loss function
     if config.loss_func.lower() == "cce":
         loss_obj = torch.nn.CrossEntropyLoss(reduction="none")
@@ -235,51 +233,34 @@ def run(config) -> None:
             lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
         )
 
-    with torch.profiler.profile(
-        activities=[
-            torch.profiler.ProfilerActivity.CUDA,
-            torch.profiler.ProfilerActivity.CPU,
-        ],
-        record_shapes=True,
-        profile_memory=True,
-        with_flops=True,
-        schedule=torch.profiler.schedule(
-            skip_first=5,
-            wait=0,
-            warmup=2,
-            active=3,
-            repeat=4,
-        ),
-        on_trace_ready=utils.trace_handler,
-    ) as prof:
-        with tqdm(range(config.nb_epochs)) as t:
-            for e in t:
+    # measuring speed of one pass
+    utils.FLOP_step_track(train_loader, network, device, out_shape, loss_func)
 
-                metrics = utils.next_epoch(
-                    network,
-                    metrics,
-                    device,
-                    fwd_optimizer,
-                    meta_optimizer,
-                    test_loader,
-                    train_loader,
-                    loss_func,
-                    e,
-                    loud_test=config.loud_test,
-                    loud_train=config.loud_train,
-                    comp_angles=config.comp_angles,
-                    validation=config.validation,
-                    wandb=wandb,
-                    num_classes=out_shape,
-                )
+    # main training loop
+    with tqdm(range(config.nb_epochs)) as t:
+        for e in t:
+            metrics = utils.next_epoch(
+                network,
+                metrics,
+                device,
+                fwd_optimizer,
+                meta_optimizer,
+                test_loader,
+                train_loader,
+                loss_func,
+                e,
+                loud_test=config.loud_test,
+                loud_train=config.loud_train,
+                comp_angles=config.comp_angles,
+                validation=config.validation,
+                num_classes=out_shape,
+            )
 
-                if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
-                    metrics["train"]["loss"][-1]
-                ):
-                    print("NaN detected, aborting training")
-                    break
-
-                prof.step()
+            if np.isnan(metrics["test"]["loss"][-1]) or np.isnan(
+                metrics["train"]["loss"][-1]
+            ):
+                print("NaN detected, aborting training")
+                break
 
     if config.comp_angles:
         wandb.log(

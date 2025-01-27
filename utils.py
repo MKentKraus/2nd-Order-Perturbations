@@ -341,11 +341,27 @@ def construct_dataloaders(
     return train_loader, test_loader, in_shape, out_shape
 
 
-def trace_handler(p):
-    print(p.key_averages().table(sort_by="cuda_time_total", row_limit=5))
-    print("{:.2f} FLOPS (torch profile)".format(sum(k.flops for k in p.key_averages())))
-    flops = sum(k.flops for k in p.key_averages())
-    wandb.log("FLOPS", flops)
+def FLOP_step_track(train_loader, network, device, out_shape, loss_func):
+
+    data, target = next(iter(train_loader))  # get data without iterating
+    onehots = torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
+    data, target = data.to(device), target.to(device)
+
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CUDA,
+            torch.profiler.ProfilerActivity.CPU,
+        ],
+        profile_memory=True,
+        with_flops=True,
+    ) as prof:
+        network.train_step(data, target, onehots, loss_func)
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=5))
+    print(
+        "{:.2f} FLOPS (torch profile)".format(sum(k.flops for k in prof.key_averages()))
+    )
+    flops = sum(k.flops for k in prof.key_averages())
+    wandb.log({"FLOPS": flops}, step=0)
 
 
 def next_epoch(
@@ -362,7 +378,6 @@ def next_epoch(
     loud_train=False,
     comp_angles=False,
     validation=False,
-    wandb=None,
     num_classes=10,
 ):
     """Trains and tests the network for one epoch.
@@ -431,53 +446,51 @@ def next_epoch(
 
     b = torch.linalg.vector_norm(b) / torch.numel(b)
 
-    if wandb is not None:
-
+    wandb.log(
+        {
+            "weights/learned weights scale": w,
+            "weights/learned biases scale": b,
+        },
+        step=epoch,
+    )
+    if comp_angles:
         wandb.log(
             {
-                "weights/learned weights scale": w,
-                "weights/learned biases scale": b,
+                "angle/angle": test_metrics[2],
+                "angle/OSE": train_results[-1],
             },
             step=epoch,
         )
-        if comp_angles:
-            wandb.log(
-                {
-                    "angle/angle": test_metrics[2],
-                    "angle/OSE": train_results[-1],
-                },
-                step=epoch,
-            )
 
-        if meta_optimizer:
-            wandb.log(
-                {
-                    "weights/weight mu": train_results[2],
-                    "weights/bias mu": train_results[3],
-                },
-                step=epoch,
-            )
+    if meta_optimizer:
+        wandb.log(
+            {
+                "weights/weight mu": train_results[2],
+                "weights/bias mu": train_results[3],
+            },
+            step=epoch,
+        )
 
-        if validation:
-            wandb.log(
-                {
-                    "validation/loss": test_metrics[0],
-                    "validation/acc": test_metrics[1],
-                    "train/loss": train_metrics[0],
-                    "train/acc": train_metrics[1],
-                },
-                step=epoch,
-            )
-        else:
-            wandb.log(
-                {
-                    "test/loss": test_metrics[0],
-                    "test/acc": test_metrics[1],
-                    "train/loss": train_metrics[0],
-                    "train/acc": train_metrics[1],
-                },
-                step=epoch,
-            )
+    if validation:
+        wandb.log(
+            {
+                "validation/loss": test_metrics[0],
+                "validation/acc": test_metrics[1],
+                "train/loss": train_metrics[0],
+                "train/acc": train_metrics[1],
+            },
+            step=epoch,
+        )
+    else:
+        wandb.log(
+            {
+                "test/loss": test_metrics[0],
+                "test/acc": test_metrics[1],
+                "train/loss": train_metrics[0],
+                "train/acc": train_metrics[1],
+            },
+            step=epoch,
+        )
     return metrics
 
 
