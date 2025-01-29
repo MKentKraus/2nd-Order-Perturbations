@@ -40,7 +40,8 @@ class WPLinearFunc(torch.autograd.Function):
             else [num_perts] + list(weight.shape)
         )
 
-        seed = torch.seed()
+        seed = torch.randint(-int(1e10), int(1e10), size=(1,))
+        torch.manual_seed(seed)
         w_noise = (
             dist_sampler(noise_shape) * weight_sigma.repeat(noise_shape[0], 1, 1)
         ) + weight_mu.repeat(noise_shape[0], 1, 1) * mu_scaling
