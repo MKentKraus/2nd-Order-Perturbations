@@ -153,7 +153,7 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
 
-            Fd_2nd = loss_2 - 2 * loss_1.repeat(self.num_perts) + loss_3
+            Fd_2nd = loss_2 - 2 * loss_1.repeat(self.num_perts) + loss_3 + 1e-16
             Fd_2nd = Fd_2nd.view(self.num_perts, -1)
 
             Fd_1st = loss_2 - loss_3

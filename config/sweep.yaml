@@ -1,7 +1,7 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name:  5-layer WP sweep, over learning rates, without mean learning, with momentum
+name:  1-layer 2nd_order MNIST MSE sweep
 method: grid
 metric:
   goal: maximize
@@ -10,15 +10,15 @@ parameters:
     learning_rate:
         values: [ "2**-10", "2**-11",    "2**-12", "2**-13", "2**-14",    "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
     algorithm:
-        values: ["FFD", "CFD"]
+        values: ["2nd_order"]
     num_perts:
-        values: [1, 4]
+        values: [1]
     sigma:
         values: ["2**-7", "2**-8",    "2**-9",   "2**-10", "2**-11",    "2**-12", "2**-13", "2**-14",    "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
     seed: 
-        values: [42]
+        value: 0
     mu_scaling_factor:
-        values: [0]
+        value: 0
     nb_epochs:
         value: 100
     dataset:
@@ -28,9 +28,9 @@ parameters:
     momentum_switch:
         value: True
     momentum: 
-        values: [0, 0.1, 0.5, 0.8, 0.9, 0.99]
+        value: 0
     dampening:
-        values: [True, False] 
+        value:  
 
 
 command:
