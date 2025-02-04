@@ -1,36 +1,42 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name:  5-layer WP sweep, over learning rates, without mean learning, with momentum
+name:  WP (best FFD, CCE loss) Test, CIFAR10, 1-layer, 1024
 method: grid
 metric:
   goal: maximize
-  name: validation/acc
+  name: test/acc
 parameters:
-    learning_rate:
-        values: [ "2**-10", "2**-11",    "2**-12", "2**-13", "2**-14",    "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
-    algorithm:
-        values: ["FFD", "CFD"]
-    num_perts:
-        values: [1, 4]
-    sigma:
-        values: ["2**-7", "2**-8",    "2**-9",   "2**-10", "2**-11",    "2**-12", "2**-13", "2**-14",    "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
-    seed: 
-        values: [42]
-    mu_scaling_factor:
-        values: [0]
-    nb_epochs:
-        value: 100
-    dataset:
-        value: "CIFAR10"
-    validation: 
-        value: True
-    momentum_switch:
-        value: True
-    momentum: 
-        values: [0, 0.1, 0.5, 0.8, 0.9, 0.99]
-    dampening:
-        values: [True, False] 
+  algorithm:
+    value: FFD
+  dampening:
+    value: false
+  dataset:
+    value: CIFAR10
+  learning_rate:
+    values:
+      - 2**-24
+  momentum:
+    value: 0
+  momentum_switch:
+    value: true
+  mu_scaling_factor:
+    value: 0
+  nb_epochs:
+    value: 500
+  num_perts:
+    value: 1024
+  seed:
+    values:
+      - 42
+      - 45
+      - 68
+      - 89
+      - 93
+  sigma:
+    value: 2**-19
+  validation:
+    value: false
 
 
 command:

@@ -6,6 +6,7 @@ import numpy as np
 import torchvision
 import matplotlib.pyplot as plt
 import torchvision.transforms as v2
+import wandb
 
 
 def make_dist_sampler(
@@ -338,6 +339,29 @@ def construct_dataloaders(
         # elif ... # TODO: Add more datasets here and add to the assert above
 
     return train_loader, test_loader, in_shape, out_shape
+
+
+def FLOP_step_track(train_loader, network, device, out_shape, loss_func):
+
+    data, target = next(iter(train_loader))  # get data without iterating
+    onehots = torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
+    data, target = data.to(device), target.to(device)
+
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CUDA,
+            torch.profiler.ProfilerActivity.CPU,
+        ],
+        profile_memory=True,
+        with_flops=True,
+    ) as prof:
+        network.train_step(data, target, onehots, loss_func)
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=5))
+    print(
+        "{:.2f} FLOPS (torch profile)".format(sum(k.flops for k in prof.key_averages()))
+    )
+    flops = sum(k.flops for k in prof.key_averages())
+    wandb.log({"FLOPS": flops}, step=0)
 
 
 def next_epoch(
