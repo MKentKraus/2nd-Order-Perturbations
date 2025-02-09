@@ -44,7 +44,18 @@ class WPLinearFunc(torch.autograd.Function):
         torch.manual_seed(seed)
         w_noise = (
             dist_sampler(noise_shape) * weight_sigma.repeat(noise_shape[0], 1, 1)
-        ) + weight_mu.repeat(noise_shape[0], 1, 1) * mu_scaling
+        ) + weight_mu.repeat(
+            noise_shape[0], 1, 1
+        ) * mu_scaling  # sample from a normal gaussian, then reshape into desired variance and mean.
+
+        # expand noise to be separate for each batch part
+        w_noise = w_noise.repeat(batch_size, 1, 1)
+
+        w_noise = torch.where(
+            torch.unsqueeze(input[:batch_size], 1).expand(-1, weight.shape[0], -1) == 0,
+            0,
+            w_noise,
+        )  # Do not perturb zero inputs.
 
         b_noise = None
 
@@ -131,6 +142,7 @@ class WPLinear(torch.nn.Linear):
         meta_lr,
         sample_wise: bool = False,
         num_perts: int = 1,
+        device,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -149,7 +161,7 @@ class WPLinear(torch.nn.Linear):
             size=(self.weight.shape),
             fill_value=sigma,
             dtype=torch.float32,
-            device="cuda:0",
+            device=device,
         )
 
         self.register_buffer(
@@ -157,7 +169,7 @@ class WPLinear(torch.nn.Linear):
             torch.zeros(
                 size=(self.weight.shape),
                 dtype=torch.float32,
-                device="cuda:0",
+                device=device,
             ),
         )
 
@@ -166,7 +178,7 @@ class WPLinear(torch.nn.Linear):
                 size=(self.bias.shape),
                 fill_value=sigma,
                 dtype=torch.float32,
-                device="cuda:0",
+                device=device,
             )
 
             self.register_buffer(
@@ -174,7 +186,7 @@ class WPLinear(torch.nn.Linear):
                 torch.zeros(
                     size=(self.bias.shape),
                     dtype=torch.float32,
-                    device="cuda:0",
+                    device=device,
                 ),
             )
         else:
@@ -186,7 +198,7 @@ class WPLinear(torch.nn.Linear):
             self.grad_w_est = torch.zeros(
                 size=(self.weight.shape),
                 dtype=torch.float32,
-                device="cuda:0",
+                device=device,
             )
 
             if self.bias is not None:
@@ -194,7 +206,7 @@ class WPLinear(torch.nn.Linear):
                 self.grad_b_est = torch.zeros(
                     size=(self.bias.shape),
                     dtype=torch.float32,
-                    device="cuda:0",
+                    device=device,
                 )
 
     def __str__(self):
@@ -241,9 +253,6 @@ class WPLinear(torch.nn.Linear):
         # Scaling factor \in [batch, num_pert]
         # weight \in [batch OR pert, out, in]
 
-        # print(torch.linalg.vector_norm(self.weight_diff))
-        # print(torch.linalg.vector_norm(scaling_factor))
-
         torch.manual_seed(self.seed)
 
         noise_shape = (
@@ -264,7 +273,7 @@ class WPLinear(torch.nn.Linear):
                     + self.weight_mu.repeat(noise_shape[0], 1, 1)
                     * self.mu_scaling_factor
                 )[:, None, :, :]
-            )
+            )  # scaling factor times the reconstructed noise
 
         else:
             scaled_weight_diff = (
