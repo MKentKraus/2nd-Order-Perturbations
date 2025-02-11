@@ -4,7 +4,7 @@ bias: True
 dataset: "CIFAR10"
 batch_size: 128
 seed: 42
-device: "cuda:0"
+device: "cpu"
 
 #Testing settings
 loud_test: True
@@ -30,7 +30,7 @@ momentum_switch: True
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: Memory test (5 layers) 2 
+name: Fewer Perts test
 mode: "offline"
 
 
