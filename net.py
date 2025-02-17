@@ -132,9 +132,10 @@ class PerturbNet(torch.nn.Module):
         loss_differential = loss_differential.view(
             self.num_perts, -1
         )  # dim num_perts, batch size
-        normalization = self.get_normalization(self.network).unsqueeze(
-            1
-        )  # dim num_perts
+
+        normalization = self.get_normalization(
+            self.network
+        )  # dim num_perts, batch size
 
         grad_scaling = (
             loss_differential * normalization

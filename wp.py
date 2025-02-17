@@ -101,10 +101,9 @@ class WPLinearFunc(torch.autograd.Function):
         else:
             raise ValueError("Other perturbation types not yet implemented.")
 
-        square_norm = torch.sum(w_noise**2, dim=(1, 2, 3))
+        square_norm = torch.sum(w_noise**2, dim=(2, 3))
         if bias is not None:
-            square_norm += torch.sum(b_noise**2, dim=1)
-
+            square_norm += torch.sum(b_noise**2, dim=1).unsqueeze(1)
         return output, seed, square_norm, w_noise != 0
 
     @staticmethod
@@ -269,8 +268,8 @@ class WPLinear(torch.nn.Linear):
         ) + self.weight_mu.repeat(noise_shape[0], 1, 1) * self.mu_scaling_factor
 
         w_noise = torch.unsqueeze(w_noise, 1).repeat(1, batch_size, 1, 1)
-
         w_noise = torch.where(self.mask, w_noise, 0)
+
         scaled_weight_diff = (
             scaling_factor[:, :, None, None] * w_noise[:, :, :, :]
         )  # scaling factor times the reconstructed noise
