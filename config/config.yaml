@@ -1,7 +1,7 @@
 #Setup 
 nb_epochs: 100
 bias: True
-dataset: "MNIST"
+dataset: "CIFAR10"
 batch_size: 128
 seed: 42
 device: "cuda:0"
@@ -17,21 +17,20 @@ optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
 learning_rate: "2**-20"
-num_perts: 1
+num_perts: 1024
 algorithm: "CFD" #ffd, cfd or bp
 sigma: "2**-5"
 meta_learning_rate: 0
 mu_scaling_factor: 0
 momentum: 0
 dampening: False
-momentum_switch: True
 
 
 #Wandb
 project: MetaWP
 entity: brai-lab
-name: Fewer Perts test
-mode: "offline"
+name: 
+mode: "online"
 
 
 
