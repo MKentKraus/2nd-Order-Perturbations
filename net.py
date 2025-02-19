@@ -71,7 +71,7 @@ class PerturbNet(torch.nn.Module):
         num_params, normalizer = self.get_network_noise_normalizers(network)
 
         normalization_1st = num_params / normalizer
-        normalization_2nd = num_params / (normalizer * normalizer)
+        normalization_2nd = torch.pow(normalization_1st, 2)
 
         return normalization_1st, normalization_2nd
 
@@ -153,7 +153,7 @@ class PerturbNet(torch.nn.Module):
                 onehots.repeat(self.num_perts, 1),
             )
 
-            Fd_2nd = loss_2 - 2 * loss_1.repeat(self.num_perts) + loss_3 + 1e-16
+            Fd_2nd = loss_2 - 2 * loss_1.repeat(self.num_perts) + loss_3 + 1e-8
             Fd_2nd = Fd_2nd.view(self.num_perts, -1)
 
             Fd_1st = loss_2 - loss_3
@@ -164,16 +164,11 @@ class PerturbNet(torch.nn.Module):
         )  # dim num_perts
 
         if "2nd_order" in self.pert_type.lower():
-            if (
-                torch.abs(Fd_2nd) > 1e-15
-            ).all:  # Only do second order step if it would not result in numerical instability
-                grad_scaling = (Fd_1st * normalization_1st.unsqueeze(1)) / (
-                    Fd_2nd * normalization_2nd.unsqueeze(1)
-                )
-                # each perturbation should be multiplied by its normalization
-            else:
-                print("Instability, doing first order CFD step")
-                grad_scaling = Fd_1st * normalization_1st.unsqueeze(1)
+            # Only do second order step if it would not result in numerical instability
+            grad_scaling = (Fd_1st * normalization_1st.unsqueeze(1)) / (
+                Fd_2nd * normalization_2nd.unsqueeze(1)
+            )
+            # each perturbation should be multiplied by its normalization
         else:
             grad_scaling = Fd_1st * normalization_1st.unsqueeze(
                 1
