@@ -151,7 +151,7 @@ def run(config) -> None:
             fwd_optimizer = torch.optim.SGD(
                 regular_weights,
                 lr,
-                momentum=config.momentum if config.momentum_switch else 0,
+                momentum=config.momentum,
                 dampening=config.momentum if config.dampening else 0,
             )
 
