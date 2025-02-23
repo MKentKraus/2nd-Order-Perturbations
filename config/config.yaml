@@ -16,9 +16,9 @@ validation: True
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
-learning_rate: "2**-21"
+learning_rate: "2**-10"
 num_perts: 1
-algorithm: "CFD" #ffd, cfd or bp
+algorithm: "BP" #ffd, cfd or bp
 sigma: "2**-25"
 meta_learning_rate: 0
 mu_scaling_factor: 0
@@ -30,7 +30,7 @@ dampening: False
 project: MetaWP
 entity: brai-lab
 name: test if flops recording works
-mode: "online"
+mode: "offline"
 
 
 

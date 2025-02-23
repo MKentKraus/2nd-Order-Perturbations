@@ -341,27 +341,90 @@ def construct_dataloaders(
     return train_loader, test_loader, in_shape, out_shape
 
 
-def FLOP_step_track(train_loader, network, device, out_shape, loss_func):
+def FLOP_step_track(dataset, network, device, out_shape, loss_func):
 
-    data, target = next(iter(train_loader))  # get data without iterating
-    onehots = torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
-    data, target = data.to(device), target.to(device)
-
-    with torch.profiler.profile(
-        activities=[
-            torch.profiler.ProfilerActivity.CUDA,
-            torch.profiler.ProfilerActivity.CPU,
-        ],
-        profile_memory=True,
-        with_flops=True,
-    ) as prof:
-        network.train_step(data, target, onehots, loss_func)
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=5))
-    print(
-        "{:.2f} FLOPS (torch profile)".format(sum(k.flops for k in prof.key_averages()))
+    train_loader, _, _, out_shape = construct_dataloaders(
+        dataset, 1, device, validation=True
     )
-    flops = sum(k.flops for k in prof.key_averages())
-    wandb.log({"FLOPS": flops}, step=0)
+
+    for batch_idx, (data, target) in enumerate(train_loader):
+        onehots = (
+            torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
+        )
+        data, target = data.to(device), target.to(device)
+        if batch_idx == 10:
+
+            # Whole training pass check
+            with torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CUDA,
+                    torch.profiler.ProfilerActivity.CPU,
+                ],
+                profile_memory=True,
+                with_flops=True,
+            ) as prof:
+                network.train_step(data, target, onehots, loss_func)
+
+            # 'cpu_time', 'cpu_time_str', 'cpu_time_total', 'cpu_time_total_str', 'cuda_time', 'device_memory_usage', 'device_time',
+            print(
+                "{:.2f} time cpu (training step)".format(
+                    sum(k.cpu_time for k in prof.key_averages())
+                )
+            )
+            print(
+                "{:.2f} time gpu (training step)".format(
+                    sum(k.device_time for k in prof.key_averages())
+                )
+            )
+            print(prof.key_averages().table(sort_by="cuda_time_total"))
+
+            # forward pass check
+            with torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CUDA,
+                    torch.profiler.ProfilerActivity.CPU,
+                ],
+                profile_memory=True,
+                with_flops=True,
+            ) as prof:
+                network.train()
+                _, loss_differential = network.forward_pass(
+                    data, target, onehots, loss_func
+                )
+            print(
+                "{:.2f} time cpu (forward pass)".format(
+                    sum(k.cpu_time for k in prof.key_averages())
+                )
+            )
+            print(
+                "{:.2f} time gpu (forward pass)".format(
+                    sum(k.device_time for k in prof.key_averages())
+                )
+            )
+            # Backward pass check
+            with torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CUDA,
+                    torch.profiler.ProfilerActivity.CPU,
+                ],
+                profile_memory=True,
+                with_flops=True,
+            ) as prof:
+
+                network.backward_pass(loss_differential)
+            print(
+                "{:.2f} time cpu (backward pass)".format(
+                    sum(k.cpu_time for k in prof.key_averages())
+                )
+            )
+            print(
+                "{:.2f} time gpu (backward pass)".format(
+                    sum(k.device_time for k in prof.key_averages())
+                )
+            )
+            flops = sum(k.flops for k in prof.key_averages())
+            wandb.log({"FLOPS": flops}, step=0)
+            return
 
 
 def next_epoch(

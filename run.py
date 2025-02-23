@@ -234,7 +234,7 @@ def run(config) -> None:
         )
 
     # measuring speed of one pass
-    utils.FLOP_step_track(train_loader, network, device, out_shape, loss_func)
+    utils.FLOP_step_track(config.dataset, network, device, out_shape, loss_func)
 
     # main training loop
     with tqdm(range(config.nb_epochs)) as t:
