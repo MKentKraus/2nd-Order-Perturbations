@@ -101,19 +101,28 @@ class PerturbNet(torch.nn.Module):
 
     @torch.inference_mode()
     def train_step(self, data, target, onehots, loss_func):
+        # This function performs the forward and backward pass
         self.train()
-        # mean over losses from different perturbations
+
+        loss, loss_differential = self.forward_pass(data, target, onehots, loss_func)
+        self.backward_pass(loss_differential)
+
+        return loss
+
+    @torch.inference_mode()
+    def forward_pass(self, data, target, onehots, loss_func):
         output = self(data)
         batch_size = data.shape[0]
 
         if "ffd" in self.pert_type.lower():
-            loss_1 = loss_func(output[:batch_size], target, onehots)  # clean loss
+            loss = loss_func(output[:batch_size], target, onehots)  # clean loss
             loss_2 = loss_func(
                 output[batch_size:],
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
-            loss_differential = loss_2 - loss_1.repeat(self.num_perts)
+            loss_differential = loss_2 - loss.repeat(self.num_perts)
+
         elif "cfd" in self.pert_type.lower():
             half = self.num_perts * batch_size
             loss_1 = loss_func(
@@ -126,12 +135,17 @@ class PerturbNet(torch.nn.Module):
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
-
+            loss = torch.mean(torch.stack((loss_1, loss_2), dim=0), dim=0)
             loss_differential = loss_1 - loss_2
 
         loss_differential = loss_differential.view(
             self.num_perts, -1
         )  # dim num_perts, batch size
+
+        return loss.sum().item() / self.num_perts, loss_differential
+
+    @torch.inference_mode()
+    def backward_pass(self, loss_differential):
         normalization = self.get_normalization(self.network).unsqueeze(
             1
         )  # dim num_perts
@@ -141,9 +155,6 @@ class PerturbNet(torch.nn.Module):
         )  # each perturbation should be multiplied by its normalization
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
-
-        loss_1 = loss_1.sum().item()
-        return loss_1 / self.num_perts
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
@@ -195,6 +206,14 @@ class BPNet(torch.nn.Module):
         loss = loss_func(output, target, onehots).sum()
         loss.backward()
         return loss.item()
+
+    def forward_pass(self, data, target, onehots, loss_func):
+        output = self(data)
+        loss = loss_func(output, target, onehots).sum()
+        return loss, loss
+
+    def backward_pass(self, loss):
+        loss.backward()
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
