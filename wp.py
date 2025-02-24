@@ -99,7 +99,7 @@ class WPLinearFunc(torch.autograd.Function):
         else:
             b_noise = None
 
-        return output, seed, square_norm, input[:batch_size] != 0
+        return output, seed, square_norm
 
     @staticmethod
     def add_noise(inputs: torch.Tensor, noisy_weight: torch.Tensor, sample_wise: bool):
@@ -226,7 +226,7 @@ class WPLinear(torch.nn.Linear):
                 batch_size = int(input.shape[0] / (self.num_perts + 1))
             elif "cfd" in self.pert_type.lower():
                 batch_size = int(input.shape[0] / (self.num_perts * 2))
-            (output, seed, square_norm, mask) = WPLinearFunc().apply(
+            (output, seed, square_norm) = WPLinearFunc().apply(
                 input,
                 self.weight,
                 self.weight_sigma,
@@ -241,7 +241,7 @@ class WPLinear(torch.nn.Linear):
                 self.mu_scaling_factor,
                 batch_size,
             )
-            self.mask = mask
+            self.mask = input[:batch_size] != 0
             self.seed = seed
             self.square_norm = square_norm
 
@@ -290,7 +290,8 @@ class WPLinear(torch.nn.Linear):
             )  # dimensions - batch_size, perturbations, output, input
 
         self.weight.grad = torch.sum(
-            self.mask.unsqueeze(1) * torch.mean(scaled_weight_diff, axis=1), dim=0
+            (self.mask).unsqueeze(1) * torch.mean(scaled_weight_diff, axis=1),
+            dim=0,
         )
 
         if self.bias is not None:
