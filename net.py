@@ -133,8 +133,8 @@ class PerturbNet(torch.nn.Module):
             self.num_perts, -1
         )  # dim num_perts, batch size
 
-        normalization = self.get_normalization(
-            self.network
+        normalization = self.get_normalization(self.network).unsqueeze(
+            1
         )  # dim num_perts, batch size
 
         grad_scaling = (
