@@ -254,6 +254,10 @@ class WPLinear(torch.nn.Linear):
                 scaling_factor[:, :, None, None] * self.weight_diff[None, :, :, :]
             )
 
+        scaled_weight_diff = torch.tensordot(
+            scaling_factor[:, :, None, None], self.weight_diff[None, :, :, :], dims=2
+        )
+
         self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0)
 
         if self.bias is not None:
