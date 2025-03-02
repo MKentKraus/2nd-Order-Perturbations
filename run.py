@@ -166,7 +166,7 @@ def run(config) -> None:
         )
 
     # measuring speed of one pass
-    utils.FLOP_step_track(train_loader, network, device, out_shape, loss_func)
+    # utils.FLOP_step_track(train_loader, network, device, out_shape, loss_func)
 
     with tqdm(range(config.nb_epochs)) as t:
         for e in t:
@@ -193,6 +193,13 @@ def run(config) -> None:
                 metrics["train"]["loss"][-1]
             ):
                 print("NaN detected, aborting training")
+                break
+            if (e == 15 and metrics["test"]["acc"][-1] < 20) or metrics["test"]["loss"][
+                -1
+            ] > 4:
+                print(
+                    "Network is not learning fast enough, or has too high of a loss, aborting training"
+                )
                 break
     if config.comp_angles:
         wandb.log(

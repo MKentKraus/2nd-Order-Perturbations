@@ -1,21 +1,33 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name:  WP (best FFD, CCE loss) Test, CIFAR10, 1-layer, 1024
+name:  WP CIFAR10 parameter sweep, 2 perturbations, 1 layer network, CCE loss
 method: grid
 metric:
   goal: maximize
-  name: test/acc
+  name: validation/acc
 parameters:
   algorithm:
-    value: FFD
+    values: ["FFD", "CFD"]
   dampening:
     value: false
   dataset:
     value: CIFAR10
   learning_rate:
     values:
+      - 2**-13
+      - 2**-14
+      - 2**-15
+      - 2**-16
+      - 2**-17
+      - 2**-18
+      - 2**-19
+      - 2**-20
+      - 2**-21
+      - 2**-22
+      - 2**-23
       - 2**-24
+      - 2**-25
   momentum:
     value: 0
   momentum_switch:
@@ -23,20 +35,36 @@ parameters:
   mu_scaling_factor:
     value: 0
   nb_epochs:
-    value: 500
+    value: 100
   num_perts:
-    value: 1024
+    values: [2]
   seed:
-    values:
-      - 42
-      - 45
-      - 68
-      - 89
-      - 93
+    value: 42
   sigma:
-    value: 2**-19
+    values:
+      - 2**-5
+      - 2**-6
+      - 2**-7
+      - 2**-8
+      - 2**-9
+      - 2**-10
+      - 2**-11
+      - 2**-12
+      - 2**-13
+      - 2**-14
+      - 2**-15
+      - 2**-16
+      - 2**-17
+      - 2**-18
+      - 2**-19
+      - 2**-20
+      - 2**-21
+      - 2**-22
+      - 2**-23
+      - 2**-24
+      - 2**-25
   validation:
-    value: false
+    value: true
 
 
 command:
