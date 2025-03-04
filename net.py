@@ -67,7 +67,7 @@ class PerturbNet(torch.nn.Module):
 
     def get_normalization(self, network):
         num_params, normalizer = self.get_network_noise_normalizers(network)
-        normalization = num_params / normalizer
+        normalization = torch.div(torch.tensor(num_params), normalizer)
 
         return normalization
 
@@ -141,7 +141,6 @@ class PerturbNet(torch.nn.Module):
         loss_differential = loss_differential.view(
             self.num_perts, -1
         )  # dim num_perts, batch size
-
         return loss.sum().item() / self.num_perts, loss_differential
 
     @torch.inference_mode()
@@ -150,8 +149,8 @@ class PerturbNet(torch.nn.Module):
             1
         )  # dim num_perts
 
-        grad_scaling = (
-            loss_differential * normalization
+        grad_scaling = torch.mul(
+            loss_differential, normalization
         )  # each perturbation should be multiplied by its normalization
 
         self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)

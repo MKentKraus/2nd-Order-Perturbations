@@ -23,19 +23,6 @@ def prod(x):
     return res
 
 
-def matmul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
-    """
-    Count flops for matmul.
-    """
-    # Inputs should be a list of length 2.
-    # Inputs contains the shapes of two matrices.
-    input_shapes = [get_shape(v) for v in inputs]
-    assert len(input_shapes) == 2, input_shapes
-    assert input_shapes[0][-1] == input_shapes[1][-2], input_shapes
-    flop = prod(input_shapes[0]) * input_shapes[-1][-1]
-    return flop
-
-
 def addmm_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     Count flops for fully connected layers.
@@ -50,6 +37,8 @@ def addmm_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     batch_size, input_dim = input_shapes[0]
     output_dim = input_shapes[1][1]
     flops = batch_size * input_dim * output_dim
+    print("did adm")
+
     return flops
 
 
@@ -67,75 +56,86 @@ def bmm_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     return flop
 
 
-def conv_flop_count(
-    x_shape: List[int],
-    w_shape: List[int],
-    out_shape: List[int],
-    transposed: bool = False,
-) -> Number:
+def mul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
-    Count flops for convolution. Note only multiplication is
-    counted. Computation for addition and bias is ignored.
-    Flops for a transposed convolution are calculated as
-    flops = (x_shape[2:] * prod(w_shape) * batch_size).
-    Args:
-        x_shape (list(int)): The input shape before convolution.
-        w_shape (list(int)): The filter shape.
-        out_shape (list(int)): The output shape after convolution.
-        transposed (bool): is the convolution transposed
-    Returns:
-        int: the number of flops
+    Count flops for torch.mul.
     """
-    batch_size = x_shape[0]
-    conv_shape = (x_shape if transposed else out_shape)[2:]
-    flop = batch_size * prod(w_shape) * prod(conv_shape)
+    # Inputs should be a list of length 2.
+    # Inputs contains the shapes of two matrices.
+    assert len(inputs) == 2, inputs
+
+    input_shapes = torch.cat(
+        (torch.tensor(inputs[0].shape), torch.tensor(inputs[1].shape))
+    )
+    print("did torch.mul operation")
+    print(input_shapes.unique(sorted=False))
+    input_shapes = input_shapes.unique()
+    flop = torch.prod(input_shapes)
     return flop
 
 
-def conv_flop(inputs: List[Any], outputs: List[Any]):
+def matmul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
-    Count flops for convolution.
+    Count flops for matmul.
     """
-    x, w = inputs[:2]
-    x_shape, w_shape, out_shape = (get_shape(x), get_shape(w), get_shape(outputs[0]))
-    transposed = inputs[6]
+    # Inputs should be a list of length 2.
+    # Inputs contains the shapes of two matrices.
+    input_shapes = [get_shape(v) for v in inputs]
+    assert len(input_shapes) == 2, input_shapes
+    assert input_shapes[0][-1] == input_shapes[1][-2], input_shapes
+    flop = 2 * prod(input_shapes[0]) * input_shapes[-1][-1]
+    print("did matmul")
 
-    return conv_flop_count(x_shape, w_shape, out_shape, transposed=transposed)
+    return flop
+
+
+def sum_flop(inputs: List[Any], outputs: List[Any]) -> Number:
+    """
+    Count flops for the sum operation.
+    """
+    print("did sum operation")
+    print(inputs[0].shape)
+    flops = torch.prod(torch.tensor(inputs[0].shape))
+    return flops
+
+
+def einsum_flop(inputs: List[Any], outputs: List[Any]) -> Number:
+    """
+    Count flops for the sum operation.
+    """
+    print("did einsum operation")
+    # input is tuple of (einsum specification, [ tensor 1, tensor 2])
+    # print(len(inputs[1]))
+    # print(inputs[1])
+    # print(type(inputs[1][0]))
+    print(inputs[1][0].shape)
+    print(inputs[1][1].shape)
+
+    input_shapes = [get_shape(v) for v in inputs[1][:]]
+    assert len(input_shapes) == 2, input_shapes
+    # print(inputs[1][0].shape)
+    # print(inputs[1][1].shape)
+    flop = 2 * prod(input_shapes[0]) * input_shapes[-1][-1]  # redetermine this
+    print(outputs[0].shape)
+    return flop
 
 
 def transpose_shape(shape):
     return [shape[1], shape[0]] + list(shape[2:])
 
 
-def conv_backward_flop(inputs: List[Any], outputs: List[Any]):
-    grad_out_shape, x_shape, w_shape = [get_shape(i) for i in inputs[:3]]
-    output_mask = inputs[-1]
-    fwd_transposed = inputs[7]
-    flop_count = 0
-
-    if output_mask[0]:
-        grad_input_shape = get_shape(outputs[0])
-        flop_count += conv_flop_count(
-            grad_out_shape, w_shape, grad_input_shape, not fwd_transposed
-        )
-    if output_mask[1]:
-        grad_weight_shape = get_shape(outputs[1])
-        flop_count += conv_flop_count(
-            transpose_shape(x_shape), grad_out_shape, grad_weight_shape, fwd_transposed
-        )
-
-    return flop_count
-
-
 flop_mapping = {
     aten.mm: matmul_flop,
     aten.matmul: matmul_flop,
     aten.addmm: addmm_flop,
-    aten.bmm: bmm_flop,
-    aten.convolution: conv_flop,
-    aten._convolution: conv_flop,
-    aten.convolution_backward: conv_backward_flop,
+    aten.sum: sum_flop,
+    aten.mul: mul_flop,
+    aten.mean: sum_flop,
+    aten.einsum: einsum_flop,
 }
+
+
+# Note that division was excluded, because it caused the flop counter to count itself, and because the only operation where it appears is equal to the number of perturbations.
 
 
 def normalize_tuple(x):
@@ -218,7 +218,7 @@ class FlopCounterMode(TorchDispatchMode):
         for mod in self.flop_counts.keys():
             print(f"Module: ", mod)
             for k, v in self.flop_counts[mod].items():
-                print(f"{k}: {v/1e9} GFLOPS")
+                print(f"{k}: {v} FLOPS")
             print()
         super().__exit__(*args)
 
@@ -227,6 +227,7 @@ class FlopCounterMode(TorchDispatchMode):
 
         out = func(*args, **kwargs)
         func_packet = func._overloadpacket
+        # print(func_packet)
         if func_packet in flop_mapping:
             flop_count = flop_mapping[func_packet](args, normalize_tuple(out))
             for par in self.parents:
@@ -235,8 +236,20 @@ class FlopCounterMode(TorchDispatchMode):
         return out
 
 
+def getBack(var_grad_fn):
+    print(var_grad_fn)
+    for n in var_grad_fn.next_functions:
+        if n[0]:
+            try:
+                tensor = getattr(n[0], "variable")
+                print(n[0])
+                print()
+                print("Tensor with grad found:", tensor.shape)
+            except AttributeError as e:
+                getBack(n[0])
+
+
 def FLOP_step_track(dataset, network, device, out_shape, loss_func):
-    flop_counter = FlopCounterMode(network)
 
     train_loader, _, _, out_shape = utils.construct_dataloaders(
         dataset, 1, device, validation=True
@@ -247,37 +260,22 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
             torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
         )
         data, target = data.to(device), target.to(device)
+        # _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+
         _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+
+        if type(loss_differential) != torch.Tensor:
+            loss_differential = torch.tensor(loss_differential)
+
         if batch_idx == 10:
-            cProfile.runctx(
-                "network.train_step(data, target, onehots, loss_func)",
-                globals(),
-                locals(),
-            )
 
-            print("whole")
-            cProfile.runctx(
-                "network.train_step(data, target, onehots, loss_func)",
-                globals(),
-                locals(),
-            )
-            print("backward")
-
-            cProfile.runctx(
-                "network.backward_pass(loss_differential)", globals(), locals()
-            )
-            print("forward")
-
-            cProfile.runctx(
-                "network.forward_pass(data, target, onehots, loss_func)",
-                globals(),
-                locals(),
-            )
-
-            print("backward pass")
+            flop_counter = FlopCounterMode(network)
             with flop_counter:
-                network.backward_pass(loss_differential)
+                network.forward_pass(data, target, onehots, loss_func)
             exit(0)
+
+            # print("\n \n \n \n ")
+            # getBack(loss_differential.grad_fn)
 
             # https://pastebin.com/V3wATa7w
             # https://github.com/EricCousineau-TRI/repro/blob/bdef8a14b5/python/cprofile_with_torch/repro.py#L75-L94
