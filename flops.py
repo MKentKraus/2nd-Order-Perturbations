@@ -27,17 +27,20 @@ def addmm_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     Count flops for fully connected layers.
     """
-    # Count flop for nn.Linear
-    # inputs is a list of length 3.
-    input_shapes = [get_shape(v) for v in inputs[1:3]]
-    # input_shapes[0]: [batch size, input feature dimension]
-    # input_shapes[1]: [batch size, output feature dimension]
-    assert len(input_shapes[0]) == 2, input_shapes[0]
-    assert len(input_shapes[1]) == 2, input_shapes[1]
-    batch_size, input_dim = input_shapes[0]
-    output_dim = input_shapes[1][1]
-    flops = batch_size * input_dim * output_dim
-    print("did adm")
+    # Count flops for nn.Linear
+    # inputs is a list of length 3 - bias, inputs [batch size, input feature dimension], weights  [input feature dimension, output feature dimension].
+    input_shapes = [get_shape(v) for v in inputs]
+
+    assert len(input_shapes[1]) == 2, input_shapes[0]
+    assert len(input_shapes[2]) == 2, input_shapes[1]
+    assert (
+        input_shapes[2][1] == input_shapes[0][0]
+    ), "output dimension and the number of biases should be the same"
+    batch_size, input_dim = input_shapes[1]
+    output_dim = input_shapes[2][1]
+    flops = (
+        batch_size * output_dim + 2 * batch_size * input_dim * output_dim
+    )  # bias + matrix multiplication
 
     return flops
 
@@ -46,6 +49,7 @@ def bmm_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     Count flops for the bmm operation.
     """
+    # not made by Martin
     # Inputs should be a list of length 2.
     # Inputs contains the shapes of two tensor.
     assert len(inputs) == 2, len(inputs)
@@ -68,10 +72,9 @@ def mul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
         (torch.tensor(inputs[0].shape), torch.tensor(inputs[1].shape))
     )
     print("did torch.mul operation")
-    print(input_shapes.unique(sorted=False))
     input_shapes = input_shapes.unique()
-    flop = torch.prod(input_shapes)
-    return flop
+    print(torch.prod(input_shapes.unique()))
+    return torch.prod(input_shapes.unique())
 
 
 def matmul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
@@ -80,11 +83,12 @@ def matmul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     # Inputs should be a list of length 2.
     # Inputs contains the shapes of two matrices.
+    print("did matmul")
+
     input_shapes = [get_shape(v) for v in inputs]
     assert len(input_shapes) == 2, input_shapes
     assert input_shapes[0][-1] == input_shapes[1][-2], input_shapes
     flop = 2 * prod(input_shapes[0]) * input_shapes[-1][-1]
-    print("did matmul")
 
     return flop
 
@@ -94,30 +98,51 @@ def sum_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     Count flops for the sum operation.
     """
     print("did sum operation")
-    print(inputs[0].shape)
-    flops = torch.prod(torch.tensor(inputs[0].shape))
+    # check if it gives me the index which it sums over -> compare outputs to the inputs
+    if inputs[0].squeeze().shape != outputs[0].squeeze().shape:
+        flops = int(torch.prod(torch.tensor(inputs[0].shape)))
+    else:
+        flops = 0
     return flops
 
 
 def einsum_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
-    Count flops for the sum operation.
+    Count flops for the einsum operation.
     """
     print("did einsum operation")
     # input is tuple of (einsum specification, [ tensor 1, tensor 2])
-    # print(len(inputs[1]))
-    # print(inputs[1])
-    # print(type(inputs[1][0]))
-    print(inputs[1][0].shape)
-    print(inputs[1][1].shape)
 
     input_shapes = [get_shape(v) for v in inputs[1][:]]
     assert len(input_shapes) == 2, input_shapes
-    # print(inputs[1][0].shape)
-    # print(inputs[1][1].shape)
-    flop = 2 * prod(input_shapes[0]) * input_shapes[-1][-1]  # redetermine this
-    print(outputs[0].shape)
+    assert (
+        inputs[0] == "boi,bni->bno"
+    ), "einsum flops are only implented for boi,bni->bno"
+
+    # torch.Size([1, 10, 3072]) perturbation
+    # torch.Size([1, 1, 3072]) input
+    # torch.Size([1, 1, 10])
+
+    flop = (
+        2 * prod(input_shapes[0]) * input_shapes[-1][-2]
+    )  # 2 * (num_perts * output_size * number of weights) * batch_size
+
     return flop
+
+
+def add_flop(inputs: List[Any], outputs: List[Any]) -> Number:
+
+    # Count flops for the sum operation.
+    # Had to remove because of flop counting counting itself
+
+    print("did addition operation")
+
+    shape1 = prod(inputs[0].shape) if not isinstance(inputs[1], int) else 1
+    shape2 = prod(inputs[1].shape) if not isinstance(inputs[1], int) else 1
+
+    flops = max(shape1, shape2)
+
+    return flops if flops > 1 else 0
 
 
 def transpose_shape(shape):
@@ -132,6 +157,7 @@ flop_mapping = {
     aten.mul: mul_flop,
     aten.mean: sum_flop,
     aten.einsum: einsum_flop,
+    aten.add_: add_flop,
 }
 
 
@@ -145,6 +171,8 @@ def normalize_tuple(x):
 
 
 class FlopCounterMode(TorchDispatchMode):
+    # credit for this function goes to Horace He https://dev-discuss.pytorch.org/t/the-ideal-pytorch-flop-counter-with-torch-dispatch/505
+    # While the FLOPS functions were changed/expanded, the core code was taken from: https://pastebin.com/V3wATa7w
 
     def __init__(self, network=None):
         self.flop_counts = defaultdict(lambda: defaultdict(int))
@@ -214,12 +242,13 @@ class FlopCounterMode(TorchDispatchMode):
         super().__enter__()
 
     def __exit__(self, *args):
-        print(f"Total: {sum(self.flop_counts['Global'].values())/1e9 } GFLOPS")
+        print(f"Total: {sum(self.flop_counts['Global'].values()) } FLOPS")
         for mod in self.flop_counts.keys():
             print(f"Module: ", mod)
             for k, v in self.flop_counts[mod].items():
                 print(f"{k}: {v} FLOPS")
             print()
+
         super().__exit__(*args)
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
@@ -227,7 +256,7 @@ class FlopCounterMode(TorchDispatchMode):
 
         out = func(*args, **kwargs)
         func_packet = func._overloadpacket
-        # print(func_packet)
+        print(func_packet)
         if func_packet in flop_mapping:
             flop_count = flop_mapping[func_packet](args, normalize_tuple(out))
             for par in self.parents:
@@ -237,6 +266,7 @@ class FlopCounterMode(TorchDispatchMode):
 
 
 def getBack(var_grad_fn):
+    # helper function which helps corroborate whether FlopCounterMode missed any function calls. Used for debugging. Used as getBack(loss_differential.grad_fn)
     print(var_grad_fn)
     for n in var_grad_fn.next_functions:
         if n[0]:
@@ -271,13 +301,9 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
 
             flop_counter = FlopCounterMode(network)
             with flop_counter:
-                network.forward_pass(data, target, onehots, loss_func)
+                # network.train_step(data, target, onehots, loss_func)
+                # network.forward_pass(data, target, onehots, loss_func)
+                network.backward_pass(loss_differential)
             exit(0)
-
-            # print("\n \n \n \n ")
-            # getBack(loss_differential.grad_fn)
-
-            # https://pastebin.com/V3wATa7w
-            # https://github.com/EricCousineau-TRI/repro/blob/bdef8a14b5/python/cprofile_with_torch/repro.py#L75-L94
 
             # wandb.log({"FLOPS": flops}, step=0)
