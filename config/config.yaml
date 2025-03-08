@@ -1,5 +1,5 @@
 #Setup 
-nb_epochs: 100
+nb_epochs: 5
 bias: True
 dataset: "CIFAR10"
 batch_size: 128
@@ -16,10 +16,10 @@ validation: True
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
-learning_rate: "2**-10"
+learning_rate: "2**-18"
 num_perts: 1
-algorithm: "cfd" #ffd, cfd or bp
-sigma: "2**-25"
+algorithm: "FFD" #ffd, cfd or bp
+sigma: "2**-20"
 meta_learning_rate: 0
 mu_scaling_factor: 0
 momentum: 0

@@ -7,32 +7,66 @@ metric:
   goal: maximize
   name: validation/acc
 parameters:
+  algorithm:
+    values: ["FFD", "CFD"]
+  dampening:
+    value: false
+  dataset:
+    value: CIFAR10
+  learning_rate:
+    values:
+      - 2**-13
+      - 2**-14
+      - 2**-15
+      - 2**-16
+      - 2**-17
+      - 2**-18
+      - 2**-19
+      - 2**-20
+      - 2**-21
+      - 2**-22
+      - 2**-23
+      - 2**-24
+      - 2**-25
+  momentum:
+    value: 0
+  momentum_switch:
+    value: true
+  mu_scaling_factor:
+    value: 0
+  nb_epochs:
+    value: 100
+  num_perts:
+    values: [2]
+  seed:
+    value: 42
+  sigma:
+    values:
+      - 2**-5
+      - 2**-6
+      - 2**-7
+      - 2**-8
+      - 2**-9
+      - 2**-10
+      - 2**-11
+      - 2**-12
+      - 2**-13
+      - 2**-14
+      - 2**-15
+      - 2**-16
+      - 2**-17
+      - 2**-18
+      - 2**-19
+      - 2**-20
+      - 2**-21
+      - 2**-22
+      - 2**-23
+      - 2**-24
+      - 2**-25
+  validation:
+    value: true
 
-parameters:
-    learning_rate:
-        values: [ "2**-10", "2**-11",   "2**-12", "2**-13", "2**-14",  "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
-    meta_learning_rate:
-        values: 0
-    algorithm:
-        values: ["CFD", "FFD"]
-    num_perts:
-        values: [1, 4]
-    sigma:
-        values: ["2**-7", "2**-8",    "2**-9",   "2**-10", "2**-11",    "2**-12", "2**-13", "2**-14",    "2**-15", "2**-16", "2**-17","2**-18","2**-19","2**-20", "2**-21","2**-22","2**-23", "2**-24", "2**-25" ]
-    seed: 
-        values: [42]
-    mu_scaling_factor:
-        values: [0]
-    nb_epochs:
-        value: 100
-    dataset:
-        value: "CIFAR10"
-    validation: 
-        value: True
-    momentum: 
-        value: 0
-    dampening:
-        value: False
+
 command:
   - ${env}
   - python
