@@ -147,7 +147,7 @@ class PerturbNet(torch.nn.Module):
     def backward_pass(self, loss_differential):
         normalization = self.get_normalization(self.network).unsqueeze(
             1
-        )  # dim num_perts
+        )  # dim num_perts, batch size
 
         grad_scaling = torch.mul(
             loss_differential, normalization

@@ -147,6 +147,7 @@ class WPLinear(torch.nn.Linear):
         meta_lr,
         sample_wise: bool = False,
         num_perts: int = 1,
+        device,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -165,7 +166,7 @@ class WPLinear(torch.nn.Linear):
             size=(self.weight.shape),
             fill_value=sigma,
             dtype=torch.float32,
-            device="cuda:0",
+            device=device,
         )
 
         self.register_buffer(
@@ -173,7 +174,7 @@ class WPLinear(torch.nn.Linear):
             torch.zeros(
                 size=(self.weight.shape),
                 dtype=torch.float32,
-                device="cuda:0",
+                device=device,
             ),
         )
 
@@ -182,7 +183,7 @@ class WPLinear(torch.nn.Linear):
                 size=(self.bias.shape),
                 fill_value=sigma,
                 dtype=torch.float32,
-                device="cuda:0",
+                device=device,
             )
 
             self.register_buffer(
@@ -190,7 +191,7 @@ class WPLinear(torch.nn.Linear):
                 torch.zeros(
                     size=(self.bias.shape),
                     dtype=torch.float32,
-                    device="cuda:0",
+                    device=device,
                 ),
             )
         else:
@@ -202,7 +203,7 @@ class WPLinear(torch.nn.Linear):
             self.grad_w_est = torch.zeros(
                 size=(self.weight.shape),
                 dtype=torch.float32,
-                device="cuda:0",
+                device=device,
             )
 
             if self.bias is not None:
@@ -210,7 +211,7 @@ class WPLinear(torch.nn.Linear):
                 self.grad_b_est = torch.zeros(
                     size=(self.bias.shape),
                     dtype=torch.float32,
-                    device="cuda:0",
+                    device=device,
                 )
 
     def __str__(self):
@@ -242,9 +243,8 @@ class WPLinear(torch.nn.Linear):
                 self.mu_scaling_factor,
                 self.batch_size,
             )
-
+            self.mask = input[:batch_size] != 0
             self.seed = seed
-
             self.square_norm = square_norm
 
         else:  # Do not perturb if weight are not being trained.
@@ -268,6 +268,7 @@ class WPLinear(torch.nn.Linear):
             if self.sample_wise
             else [self.num_perts] + list(self.weight.shape)
         )
+
         if self.sample_wise:
             scaled_weight_diff = (
                 scaling_factor[:, :, None, None]
@@ -291,7 +292,11 @@ class WPLinear(torch.nn.Linear):
                 )[None, :, :, :]
             )
         # scaled weight diff has shape batch, num pert, output shape, input shape
-        self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=1), dim=0)
+
+        self.weight.grad = torch.sum(
+            (self.mask).unsqueeze(1) * torch.mean(scaled_weight_diff, axis=1),
+            dim=0,
+        )
 
         # Set gradients for biases
         if self.bias is not None:

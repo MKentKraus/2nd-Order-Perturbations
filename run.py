@@ -73,6 +73,34 @@ def run(config) -> None:
             torch.nn.Flatten(),
             WPLinear(
                 in_shape,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                mu_scaling_factor=mu_scaling_factor,
+                sample_wise=False,
+                num_perts=config.num_perts,
+                meta_lr=config.momentum,
+                device=config.device,
+            ),
+            torch.nn.ReLU(),
+            WPLinear(
+                500,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                mu_scaling_factor=mu_scaling_factor,
+                sample_wise=False,
+                num_perts=config.num_perts,
+                meta_lr=config.momentum,
+                device=config.device,
+            ),
+            torch.nn.ReLU(),
+            WPLinear(
+                500,
                 out_shape,
                 bias=config.bias,
                 pert_type=config.algorithm,
@@ -81,14 +109,19 @@ def run(config) -> None:
                 mu_scaling_factor=mu_scaling_factor,
                 sample_wise=False,
                 num_perts=config.num_perts,
-                meta_lr=config.meta_learning_rate,
+                meta_lr=config.momentum,
+                device=config.device,
             ),
         ).to(device)
 
-        model_bp = torch.nn.Sequential(
-            torch.nn.Flatten(),
-            torch.nn.Linear(in_shape, out_shape),
-        ).to(device)
+        model_bp = (
+            torch.nn.Sequential(
+                torch.nn.Flatten(),
+                torch.nn.Linear(in_shape, out_shape),
+            ).to(device)
+            if config.comp_angles
+            else None
+        )
 
         network = PerturbNet(
             network=model,
@@ -147,6 +180,7 @@ def run(config) -> None:
                 lr,
                 momentum=config.momentum,
                 dampening=config.momentum if config.dampening else 0,
+                nesterov=config.nesterov,
             )
         else:
             fwd_optimizer = torch.optim.SGD(
@@ -194,9 +228,12 @@ def run(config) -> None:
             ):
                 print("NaN detected, aborting training")
                 break
-            if (e == 15 and metrics["test"]["acc"][-1] < 20) or metrics["test"]["loss"][
-                -1
-            ] > 4:
+
+            if (
+                config.validation
+                and (e == 15 and metrics["test"]["acc"][-1] < 20)
+                or metrics["test"]["loss"][-1] > 4
+            ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"
                 )
