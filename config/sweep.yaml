@@ -1,34 +1,68 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab
-name:  1-layer 1024 perturbations CFD test 
+name:  3-layer validation sweep, 2,4,16 perts, with momentum, CIFAR10 
 method: grid
 metric:
   goal: maximize
-  name: test/acc
+  name: validation/acc
 parameters:
     learning_rate:
-        values: [ "2**-20"]
+        values:
+        - 2**-15
+        - 2**-16
+        - 2**-17
+        - 2**-18
+        - 2**-19
+        - 2**-20
+        - 2**-21
+        - 2**-22
+        - 2**-23
+        - 2**-24
+        - 2**-25
     algorithm:
-        values: ["CFD"]
+        values: ["FFD", "CFD"]
     num_perts:
-        values: [1024]
+        values: [2,16]
     sigma:
-        values: ["2**-25"]
+        values: 
+        - 2**-12
+        - 2**-13
+        - 2**-14
+        - 2**-15
+        - 2**-16
+        - 2**-17
+        - 2**-18
+        - 2**-19
+        - 2**-20
+        - 2**-21
+        - 2**-22
+        - 2**-23
+        - 2**-24
+        - 2**-25
     seed: 
-        values: [42,45,68,89,93]
+        value: 42
     mu_scaling_factor:
         value: 0
     nb_epochs:
-        value: 500
+        value: 100
     dataset:
         value: "CIFAR10"
     validation: 
-        value: False
+        value: True
     momentum: 
-        value: 0
+        values:
+        - 0.01
+        - 0.1
+        - 0.3
+        - 0.5
+        - 0.7
+        - 0.9
+        - 0.99
     dampening:
         value: False 
+    nesterov: 
+        values: [False, True]
 
 
 command:

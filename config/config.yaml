@@ -17,13 +17,14 @@ optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
 learning_rate: "2**-20"
-num_perts: 1024
+num_perts: 16
 algorithm: "CFD" #ffd, cfd or bp
 sigma: "2**-5"
 meta_learning_rate: 0
 mu_scaling_factor: 0
 momentum: 0
 dampening: False
+Nestorov: False
 
 
 #Wandb

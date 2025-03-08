@@ -179,6 +179,7 @@ def run(config) -> None:
                 lr,
                 momentum=config.momentum,
                 dampening=config.momentum if config.dampening else 0,
+                nesterov=config.nesterov,
             )
         else:
             fwd_optimizer = torch.optim.SGD(
