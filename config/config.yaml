@@ -24,7 +24,7 @@ meta_learning_rate: 0
 mu_scaling_factor: 0
 momentum: 0
 dampening: False
-Nestorov: False
+nesterov: False
 
 
 #Wandb
