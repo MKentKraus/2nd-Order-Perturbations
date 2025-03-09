@@ -24,6 +24,7 @@ class WPLinearFunc(torch.autograd.Function):
         mu_scaling_factor,
         batch_size,
         first_layer,
+        device,
     ):
 
         if sample_wise:
@@ -31,9 +32,9 @@ class WPLinearFunc(torch.autograd.Function):
         assert num_perts > 0, "Number of perturbations should never be zero"
         assert batch_size > 0, "Batch size must be non-zero"
 
-        output = torch.mm(input, weight.t())
-        if bias is not None:
-            output += bias
+        output = torch.zeros(
+            size=(input.shape[0], weight.shape[0]), device=device
+        )  # of shape [batch size, output size]
 
         seed = torch.randint(-int(1e10), int(1e10), size=(1,))
         torch.manual_seed(seed)
@@ -52,25 +53,26 @@ class WPLinearFunc(torch.autograd.Function):
 
         if "ffd" in pert_type.lower():
             output[batch_size:] += WPLinearFunc.add_noise(
-                input[batch_size:], w_noise, sample_wise
+                input[batch_size:], torch.add(weight, w_noise), sample_wise
             )
 
         elif "cfd" in pert_type.lower():
             halfway = batch_size * num_perts
             if first_layer:
                 perturbation = WPLinearFunc.add_noise(
-                    input[:halfway], w_noise, sample_wise
+                    input[:halfway], torch.add(weight, w_noise), sample_wise
                 )
                 output[:halfway], output[halfway:] = (
-                    output[:halfway] + perturbation,
-                    output[halfway:] - perturbation,
+                    perturbation,
+                    -perturbation,
                 )
+
             else:
-                output[:halfway] += WPLinearFunc.add_noise(
-                    input[:halfway], w_noise, sample_wise
+                output[:halfway] = WPLinearFunc.add_noise(
+                    input[:halfway], torch.add(weight, w_noise), sample_wise
                 )
-                output[halfway:] += WPLinearFunc.add_noise(
-                    input[halfway:], -w_noise, sample_wise
+                output[halfway:] = WPLinearFunc.add_noise(
+                    input[halfway:], torch.subtract(weight, w_noise), sample_wise
                 )
 
         else:
@@ -91,17 +93,23 @@ class WPLinearFunc(torch.autograd.Function):
 
             if "ffd" in pert_type.lower():
                 if sample_wise:
-                    output[batch_size:] += b_noise
+                    output[batch_size:] += torch.add(bias, b_noise)
                 else:
-                    output[batch_size:] += torch.tile(b_noise, (batch_size, 1))
+                    output[batch_size:] += torch.tile(
+                        torch.add(bias, b_noise), (batch_size, 1)
+                    )
 
             elif "cfd" in pert_type.lower():
                 if sample_wise:
                     output[:halfway] += b_noise
                     output[halfway:] -= b_noise
                 else:
-                    output[:halfway] += torch.tile(b_noise, (batch_size, 1))
-                    output[halfway:] -= torch.tile(b_noise, (batch_size, 1))
+                    output[:halfway] += torch.tile(
+                        torch.add(bias, b_noise), (batch_size, 1)
+                    )
+                    output[halfway:] -= torch.tile(
+                        torch.add(bias, b_noise), (batch_size, 1)
+                    )
             else:
                 raise ValueError("Other bias perturbation types not yet implemented.")
             square_norm += torch.sum(b_noise**2, dim=1)
@@ -175,6 +183,7 @@ class WPLinear(torch.nn.Linear):
         self.first_gradient = True
         self.first_layer = first_layer
         self.zero_masking = zero_masking
+        self.device = device
         self.weight_sigma = torch.full(
             size=(self.weight.shape),
             fill_value=sigma,
@@ -256,6 +265,7 @@ class WPLinear(torch.nn.Linear):
                 self.mu_scaling_factor,
                 self.batch_size,
                 self.first_layer,
+                self.device,
             )
             if self.zero_masking:
                 self.mask = input[: self.batch_size] != 0
