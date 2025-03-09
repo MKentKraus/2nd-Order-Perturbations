@@ -83,6 +83,8 @@ def run(config) -> None:
                 num_perts=config.num_perts,
                 meta_lr=config.momentum,
                 device=config.device,
+                first_layer=True,
+                zero_masking=config.zero_masking,
             ),
             torch.nn.ReLU(),
             WPLinear(
@@ -97,6 +99,7 @@ def run(config) -> None:
                 num_perts=config.num_perts,
                 meta_lr=config.momentum,
                 device=config.device,
+                zero_masking=config.zero_masking,
             ),
             torch.nn.ReLU(),
             WPLinear(
@@ -111,6 +114,7 @@ def run(config) -> None:
                 num_perts=config.num_perts,
                 meta_lr=config.momentum,
                 device=config.device,
+                zero_masking=config.zero_masking,
             ),
         ).to(device)
 
@@ -180,7 +184,7 @@ def run(config) -> None:
                 lr,
                 momentum=config.momentum,
                 dampening=config.momentum if config.dampening else 0,
-                nesterov=config.nesterov,
+                nesterov=config.Nestorov,
             )
         else:
             fwd_optimizer = torch.optim.SGD(
@@ -232,7 +236,7 @@ def run(config) -> None:
             if (
                 config.validation
                 and (e == 15 and metrics["test"]["acc"][-1] < 20)
-                or metrics["test"]["loss"][-1] > 4
+                or metrics["test"]["loss"][-1] > 2.6
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"

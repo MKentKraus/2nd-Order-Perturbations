@@ -9,7 +9,7 @@ device: "cuda:0"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: True
+comp_angles: False
 validation: True
 
 #Model options
@@ -17,7 +17,7 @@ optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
 learning_rate: "2**-20"
-num_perts: 16
+num_perts: 1
 algorithm: "CFD" #ffd, cfd or bp
 sigma: "2**-5"
 meta_learning_rate: 0
@@ -25,7 +25,7 @@ mu_scaling_factor: 0
 momentum: 0
 dampening: False
 nesterov: False
-
+zero_masking: True
 
 #Wandb
 project: MetaWP

@@ -23,6 +23,7 @@ class WPLinearFunc(torch.autograd.Function):
         num_perts,
         mu_scaling_factor,
         batch_size,
+        first_layer,
     ):
 
         if sample_wise:
@@ -56,12 +57,21 @@ class WPLinearFunc(torch.autograd.Function):
 
         elif "cfd" in pert_type.lower():
             halfway = batch_size * num_perts
-            output[:halfway] += WPLinearFunc.add_noise(
-                input[:halfway], w_noise, sample_wise
-            )
-            output[halfway:] += WPLinearFunc.add_noise(
-                input[halfway:], -w_noise, sample_wise
-            )
+            if first_layer:
+                perturbation = WPLinearFunc.add_noise(
+                    input[:halfway], w_noise, sample_wise
+                )
+                output[:halfway], output[halfway:] = (
+                    output[:halfway] + perturbation,
+                    output[halfway:] - perturbation,
+                )
+            else:
+                output[:halfway] += WPLinearFunc.add_noise(
+                    input[:halfway], w_noise, sample_wise
+                )
+                output[halfway:] += WPLinearFunc.add_noise(
+                    input[halfway:], -w_noise, sample_wise
+                )
 
         else:
             raise ValueError("Other weight perturbation types not yet implemented.")
@@ -148,6 +158,8 @@ class WPLinear(torch.nn.Linear):
         sample_wise: bool = False,
         num_perts: int = 1,
         device,
+        first_layer: bool = False,
+        zero_masking: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -161,7 +173,8 @@ class WPLinear(torch.nn.Linear):
         self.mu_scaling_factor = mu_scaling_factor
         self.meta_lr = meta_lr  # the meta learning rate. How much of the past gradient estimate is carried over as momentum
         self.first_gradient = True
-
+        self.first_layer = first_layer
+        self.zero_masking = zero_masking
         self.weight_sigma = torch.full(
             size=(self.weight.shape),
             fill_value=sigma,
@@ -242,8 +255,10 @@ class WPLinear(torch.nn.Linear):
                 self.num_perts,
                 self.mu_scaling_factor,
                 self.batch_size,
+                self.first_layer,
             )
-            self.mask = input[:batch_size] != 0
+            if self.zero_masking:
+                self.mask = input[: self.batch_size] != 0
             self.seed = seed
             self.square_norm = square_norm
 
@@ -292,12 +307,16 @@ class WPLinear(torch.nn.Linear):
                 )[None, :, :, :]
             )
         # scaled weight diff has shape batch, num pert, output shape, input shape
-
-        self.weight.grad = torch.sum(
-            (self.mask).unsqueeze(1) * torch.mean(scaled_weight_diff, axis=1),
-            dim=0,
-        )
-
+        if self.zero_masking:
+            self.weight.grad = torch.sum(
+                (self.mask).unsqueeze(1) * torch.mean(scaled_weight_diff, axis=1),
+                dim=0,
+            )
+        else:
+            self.weight.grad = torch.sum(
+                torch.mean(scaled_weight_diff, axis=1),
+                dim=0,
+            )
         # Set gradients for biases
         if self.bias is not None:
             b_noise_shape = (
@@ -328,6 +347,7 @@ class WPLinear(torch.nn.Linear):
                         self.mu_scaling_factor,
                     )[None, :, :]
                 )
+
             self.bias.grad = torch.sum(torch.mean(scaled_bias_diff, axis=1), dim=0)
 
         if "meta" in self.pert_type.lower():
