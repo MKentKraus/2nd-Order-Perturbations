@@ -73,7 +73,6 @@ def mul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     )
     print("did torch.mul operation")
     input_shapes = input_shapes.unique()
-    print(torch.prod(input_shapes.unique()))
     return torch.prod(input_shapes.unique())
 
 
@@ -84,12 +83,10 @@ def matmul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     # Inputs should be a list of length 2.
     # Inputs contains the shapes of two matrices.
     print("did matmul")
-
     input_shapes = [get_shape(v) for v in inputs]
     assert len(input_shapes) == 2, input_shapes
     assert input_shapes[0][-1] == input_shapes[1][-2], input_shapes
     flop = 2 * prod(input_shapes[0]) * input_shapes[-1][-1]
-
     return flop
 
 
@@ -135,14 +132,18 @@ def add_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     # Count flops for the sum operation.
     # Had to remove because of flop counting counting itself
 
-    print("did addition operation")
-
     shape1 = prod(inputs[0].shape) if not isinstance(inputs[1], int) else 1
     shape2 = prod(inputs[1].shape) if not isinstance(inputs[1], int) else 1
 
     flops = max(shape1, shape2)
 
     return flops if flops > 1 else 0
+
+
+def get_inputs(inputs: List[Any], outputs: List[Any]) -> Number:
+    print(inputs)
+    print(outputs)
+    return 0
 
 
 def transpose_shape(shape):
@@ -158,6 +159,9 @@ flop_mapping = {
     aten.mean: sum_flop,
     aten.einsum: einsum_flop,
     aten.add_: add_flop,
+    # aten.expand: get_inputs,
+    # aten._log_softmax_backward_data: get_inputs,
+    # aten.nll_loss_backward: get_inputs,
 }
 
 
@@ -171,7 +175,7 @@ def normalize_tuple(x):
 
 
 class FlopCounterMode(TorchDispatchMode):
-    # credit for this function goes to Horace He https://dev-discuss.pytorch.org/t/the-ideal-pytorch-flop-counter-with-torch-dispatch/505
+    # credit for this implementation goes to Horace He https://dev-discuss.pytorch.org/t/the-ideal-pytorch-flop-counter-with-torch-dispatch/505
     # While the FLOPS functions were changed/expanded, the core code was taken from: https://pastebin.com/V3wATa7w
 
     def __init__(self, network=None):
@@ -285,6 +289,7 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
         dataset, 1, device, validation=True
     )
 
+    # print(dict(network.named_modules()))
     for batch_idx, (data, target) in enumerate(train_loader):
         onehots = (
             torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
@@ -301,9 +306,9 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
 
             flop_counter = FlopCounterMode(network)
             with flop_counter:
-                # network.train_step(data, target, onehots, loss_func)
+                network.train_step(data, target, onehots, loss_func)
                 # network.forward_pass(data, target, onehots, loss_func)
-                network.backward_pass(loss_differential)
+                # network.backward_pass(loss_differential)
             exit(0)
 
             # wandb.log({"FLOPS": flops}, step=0)

@@ -47,6 +47,7 @@ class WPLinearFunc(torch.autograd.Function):
         )
 
         if "ffd" in pert_type.lower():
+            output[:batch_size] += torch.mm(input[batch_size:], weight.transpose())
             output[batch_size:] += WPLinearFunc.add_noise(
                 input[batch_size:], torch.add(weight, w_noise)
             )
@@ -121,9 +122,7 @@ class WPLinearFunc(torch.autograd.Function):
     def sample_noise(sampler, shape, sigma, mu, mu_scaling_factor):
         dims = torch.ones(len(shape), dtype=torch.int8).tolist()
         dims[0] = shape[0]
-        noise = (
-            sampler(shape) * sigma.repeat(dims) + mu.repeat(dims) * mu_scaling_factor
-        )
+        noise = sampler(shape) * sigma.repeat(dims) + mu.repeat(dims)
         return noise
 
     @staticmethod
@@ -155,7 +154,9 @@ class WPLinear(torch.nn.Linear):
         self.square_norm = None
         self.seed = None
         self.num_perts = num_perts
-        self.mu_scaling_factor = mu_scaling_factor
+        self.mu_scaling_factor = torch.tensor(
+            mu_scaling_factor, dtype=torch.float32, device=device
+        )
         self.meta_lr = meta_lr  # the meta learning rate. How much of the past gradient estimate is carried over as momentum
         self.first_gradient = True
         self.first_layer = first_layer

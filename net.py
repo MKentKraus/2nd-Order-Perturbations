@@ -111,6 +111,8 @@ class PerturbNet(torch.nn.Module):
 
     @torch.inference_mode()
     def forward_pass(self, data, target, onehots, loss_func):
+        self.train()
+
         output = self(data)
         batch_size = data.shape[0]
 
@@ -121,6 +123,7 @@ class PerturbNet(torch.nn.Module):
                 target.repeat(self.num_perts),
                 onehots.repeat(self.num_perts, 1),
             )
+
             loss_differential = loss_2 - loss.repeat(self.num_perts)
 
         elif "cfd" in self.pert_type.lower():
@@ -202,11 +205,14 @@ class BPNet(torch.nn.Module):
     def train_step(self, data, target, onehots, loss_func):
         self.train()
         output = self(data)
+
         loss = loss_func(output, target, onehots).sum()
+
         loss.backward()
         return loss.item()
 
     def forward_pass(self, data, target, onehots, loss_func):
+        self.train()
         output = self(data)
         loss = loss_func(output, target, onehots).sum()
         return loss, loss
