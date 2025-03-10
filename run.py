@@ -33,24 +33,11 @@ def run(config) -> None:
     else:
         lr = eval(config.learning_rate)
 
-    if isinstance(config.meta_learning_rate, float) or isinstance(
-        config.meta_learning_rate, int
-    ):
-        meta_learning_rate = config.meta_learning_rate
-    else:
-        meta_learning_rate = eval(config.meta_learning_rate)
-
     if isinstance(config.sigma, float) or isinstance(config.sigma, int):
         sigma = config.sigma
     else:
         sigma = eval(config.sigma)
 
-    if isinstance(config.mu_scaling_factor, float) or isinstance(
-        config.mu_scaling_factor, int
-    ):
-        mu_scaling_factor = config.mu_scaling_factor
-    else:
-        mu_scaling_factor = eval(config.mu_scaling_factor)
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -78,9 +65,7 @@ def run(config) -> None:
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
                 sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
                 device=config.device,
                 first_layer=True,
                 zero_masking=config.zero_masking,
@@ -93,9 +78,7 @@ def run(config) -> None:
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
                 sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
                 device=config.device,
                 zero_masking=config.zero_masking,
             ),
@@ -107,9 +90,7 @@ def run(config) -> None:
                 pert_type=config.algorithm,
                 dist_sampler=dist_sampler,
                 sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
                 num_perts=config.num_perts,
-                meta_lr=config.momentum,
                 device=config.device,
                 zero_masking=config.zero_masking,
             ),
@@ -141,12 +122,6 @@ def run(config) -> None:
             else model.named_parameters()
         )
 
-        for name, param in param_list:
-            if name.endswith("mu") or name.endswith("sigma"):
-                meta_weights.append(param)
-            else:
-                regular_weights.append(param)
-
     elif config.algorithm.lower() == "bp":
         config.comp_angles = (
             False  # BP networks do not need to compare angles with BP updates
@@ -168,28 +143,13 @@ def run(config) -> None:
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
-
-        # What should be updated
-        # If BP, just model.params()
-        # If WP and not meta and not Angles, network.params()
-        # IF WP and meta but not angle, model.regular_weights and meta_weights
-        # If WP and meta and angles, network. regular params and meta_weights
-
-        if config.algorithm.lower() == "bp":
-            fwd_optimizer = torch.optim.SGD(
-                model.parameters(),
-                lr,
-                momentum=config.momentum,
-                dampening=config.momentum if config.dampening else 0,
-                nesterov=config.Nestorov,
-            )
-        else:
-            fwd_optimizer = torch.optim.SGD(
-                regular_weights,
-                lr,
-                momentum=config.momentum,
-                dampening=config.momentum if config.dampening else 0,
-            )
+        fwd_optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr,
+            momentum=config.momentum,
+            dampening=config.momentum if config.dampening else 0,
+            nesterov=config.Nestorov,
+        )
 
     # Choose Loss function
     if config.loss_func.lower() == "cce":

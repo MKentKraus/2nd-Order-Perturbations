@@ -42,8 +42,6 @@ parameters:
         - 2**-25
     seed: 
         value: 42
-    mu_scaling_factor:
-        value: 0
     nb_epochs:
         value: 100
     dataset:

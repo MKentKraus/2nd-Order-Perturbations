@@ -20,12 +20,10 @@ learning_rate: "2**-20"
 num_perts: 1
 algorithm: "CFD" #ffd, cfd or bp
 sigma: "2**-5"
-meta_learning_rate: 0
-mu_scaling_factor: 0
 momentum: 0
 dampening: False
 nesterov: False
-zero_masking: True
+zero_masking: False
 
 #Wandb
 project: MetaWP
