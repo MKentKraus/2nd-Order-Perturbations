@@ -71,7 +71,6 @@ def mul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     input_shapes = torch.cat(
         (torch.tensor(inputs[0].shape), torch.tensor(inputs[1].shape))
     )
-    print("did torch.mul operation")
     input_shapes = input_shapes.unique()
     return torch.prod(input_shapes.unique())
 
@@ -82,7 +81,6 @@ def matmul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     # Inputs should be a list of length 2.
     # Inputs contains the shapes of two matrices.
-    print("did matmul")
     input_shapes = [get_shape(v) for v in inputs]
     assert len(input_shapes) == 2, input_shapes
     assert input_shapes[0][-1] == input_shapes[1][-2], input_shapes
@@ -94,7 +92,6 @@ def sum_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     Count flops for the sum operation.
     """
-    print("did sum operation")
     # check if it gives me the index which it sums over -> compare outputs to the inputs
     if inputs[0].squeeze().shape != outputs[0].squeeze().shape:
         flops = int(torch.prod(torch.tensor(inputs[0].shape)))
@@ -107,7 +104,6 @@ def einsum_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     """
     Count flops for the einsum operation.
     """
-    print("did einsum operation")
     # input is tuple of (einsum specification, [ tensor 1, tensor 2])
 
     input_shapes = [get_shape(v) for v in inputs[1][:]]
@@ -178,9 +174,10 @@ class FlopCounterMode(TorchDispatchMode):
     # credit for this implementation goes to Horace He https://dev-discuss.pytorch.org/t/the-ideal-pytorch-flop-counter-with-torch-dispatch/505
     # While the FLOPS functions were changed/expanded, the core code was taken from: https://pastebin.com/V3wATa7w
 
-    def __init__(self, network=None):
+    def __init__(self, network=None, loud=False):
         self.flop_counts = defaultdict(lambda: defaultdict(int))
         self.parents = ["Global"]
+        self.loud = loud
         if network is not None:
             for name, module in dict(network.named_children()).items():
                 module.register_forward_pre_hook(self.enter_module(name))
@@ -260,7 +257,8 @@ class FlopCounterMode(TorchDispatchMode):
 
         out = func(*args, **kwargs)
         func_packet = func._overloadpacket
-        print(func_packet)
+        if self.loud:
+            print(func_packet)
         if func_packet in flop_mapping:
             flop_count = flop_mapping[func_packet](args, normalize_tuple(out))
             for par in self.parents:
@@ -304,7 +302,7 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
 
         if batch_idx == 10:
 
-            flop_counter = FlopCounterMode(network)
+            flop_counter = FlopCounterMode(network, loud=False)
             with flop_counter:
                 network.train_step(data, target, onehots, loss_func)
                 # network.forward_pass(data, target, onehots, loss_func)
