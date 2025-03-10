@@ -144,13 +144,12 @@ class PerturbNet(torch.nn.Module):
         loss_differential = loss_differential.view(
             self.num_perts, -1
         )  # dim num_perts, batch size
+        loss_differential = torch.sum(loss_differential, dim=1)
         return loss.sum().item() / self.num_perts, loss_differential
 
     @torch.inference_mode()
     def backward_pass(self, loss_differential):
-        normalization = self.get_normalization(self.network).unsqueeze(
-            1
-        )  # dim num_perts, batch size
+        normalization = self.get_normalization(self.network)  # dim num_perts
 
         grad_scaling = torch.mul(
             loss_differential, normalization
