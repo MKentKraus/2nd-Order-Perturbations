@@ -47,7 +47,7 @@ class WPLinearFunc(torch.autograd.Function):
         )
 
         if "ffd" in pert_type.lower():
-            output[:batch_size] += torch.mm(input[batch_size:], weight.transpose())
+            output[:batch_size] += torch.mm(input[:batch_size], weight.t())
             output[batch_size:] += WPLinearFunc.add_noise(
                 input[batch_size:], torch.add(weight, w_noise)
             )
