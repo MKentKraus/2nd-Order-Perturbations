@@ -349,6 +349,7 @@ def next_epoch(
     train_loader,
     loss_func,
     epoch,
+    bias=True,
     loud_test=True,
     loud_train=False,
     comp_angles=False,
@@ -416,14 +417,15 @@ def next_epoch(
     w = network.state_dict().get("network.1.weight")
     w = torch.linalg.vector_norm(w) / torch.numel(w)
 
-    b = network.state_dict().get("network.1.bias")
+    if bias:
+        b = network.state_dict().get("network.1.bias")
 
-    b = torch.linalg.vector_norm(b) / torch.numel(b)
+        b = torch.linalg.vector_norm(b) / torch.numel(b)
 
     wandb.log(
         {
             "weights/learned weights scale": w,
-            "weights/learned biases scale": b,
+            "weights/learned biases scale": b if bias else 0,
         },
         step=epoch,
     )
@@ -488,8 +490,6 @@ def train(
     i = 0
 
     model.train()
-    weight_mu = []
-    bias_mu = []
 
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
