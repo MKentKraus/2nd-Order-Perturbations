@@ -67,7 +67,6 @@ def run(config) -> None:
                 sigma=sigma,
                 num_perts=config.num_perts,
                 device=config.device,
-                first_layer=True,
                 zero_masking=config.zero_masking,
             ),
         ).to(device)
@@ -116,7 +115,7 @@ def run(config) -> None:
             lr,
             momentum=config.momentum,
             dampening=config.momentum if config.dampening else 0,
-            nesterov=config.Nestorov,
+            nesterov=config.nesterov,
         )
 
     # Choose Loss function
@@ -144,6 +143,7 @@ def run(config) -> None:
                 train_loader,
                 loss_func,
                 e,
+                config.bias,
                 loud_test=config.loud_test,
                 loud_train=config.loud_train,
                 comp_angles=config.comp_angles,
@@ -160,7 +160,7 @@ def run(config) -> None:
             if (
                 config.validation
                 and (e == 15 and metrics["test"]["acc"][-1] < 20)
-                or metrics["test"]["loss"][-1] > 2.6
+                or metrics["test"]["loss"][-1] > 5
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"
