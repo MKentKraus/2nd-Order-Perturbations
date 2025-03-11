@@ -9,17 +9,19 @@ device: "cuda:0"
 #Testing settings
 loud_test: True
 loud_train: False
-comp_angles: False
+comp_angles: True
 validation: True
 
 #Model options
 optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
-learning_rate: "2**-20"
+learning_rate: "2**-25"
 num_perts: 1
 algorithm: "CFD" #ffd, cfd or bp
-sigma: "2**-5"
+sigma: "2**-16"
+meta_learning_rate: 0
+mu_scaling_factor: 0
 momentum: 0
 dampening: False
 nesterov: False
@@ -30,10 +32,4 @@ project: MetaWP
 entity: brai-lab
 name: 
 mode: "offline"
-
-
-
-
-
-
 

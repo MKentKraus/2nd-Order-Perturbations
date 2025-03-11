@@ -60,31 +60,6 @@ def run(config) -> None:
             torch.nn.Flatten(),
             WPLinear(
                 in_shape,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                num_perts=config.num_perts,
-                device=config.device,
-                first_layer=True,
-                zero_masking=config.zero_masking,
-            ),
-            torch.nn.ReLU(),
-            WPLinear(
-                500,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                num_perts=config.num_perts,
-                device=config.device,
-                zero_masking=config.zero_masking,
-            ),
-            torch.nn.ReLU(),
-            WPLinear(
-                500,
                 out_shape,
                 bias=config.bias,
                 pert_type=config.algorithm,
@@ -92,6 +67,7 @@ def run(config) -> None:
                 sigma=sigma,
                 num_perts=config.num_perts,
                 device=config.device,
+                first_layer=True,
                 zero_masking=config.zero_masking,
             ),
         ).to(device)
@@ -111,40 +87,32 @@ def run(config) -> None:
             pert_type=config.algorithm,
             BP_network=model_bp,
         )
-        regular_weights = []
-        meta_weights = []
-
-        # If comp angles, optimizer should update both BP and WP model, so we need to iterate through network.named_params
-
-        param_list = (
-            network.named_parameters()
-            if config.comp_angles
-            else model.named_parameters()
-        )
 
     elif config.algorithm.lower() == "bp":
         config.comp_angles = (
             False  # BP networks do not need to compare angles with BP updates
         )
-
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(in_shape, out_shape),
         ).to(device)
-
         network = BPNet(model)
+
     # Initialize metric storage
     metrics = utils.init_metric(config.comp_angles)
 
     # Define optimizers
     fwd_optimizer = None
-    meta_optimizer = True if "meta" in config.algorithm.lower() else None
 
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
         fwd_optimizer = torch.optim.SGD(
-            model.parameters(),
+            (
+                network.parameters()
+                if config.comp_angles and config.algorithm.lower() != "bp"
+                else model.parameters()
+            ),
             lr,
             momentum=config.momentum,
             dampening=config.momentum if config.dampening else 0,
@@ -172,7 +140,6 @@ def run(config) -> None:
                 metrics,
                 device,
                 fwd_optimizer,
-                meta_optimizer,
                 test_loader,
                 train_loader,
                 loss_func,

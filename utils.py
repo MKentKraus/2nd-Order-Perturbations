@@ -345,7 +345,6 @@ def next_epoch(
     metrics,
     device,
     optimizer,
-    meta_optimizer,
     test_loader,
     train_loader,
     loss_func,
@@ -407,7 +406,6 @@ def next_epoch(
         device,
         train_loader,
         optimizer,
-        meta_optimizer,
         epoch,
         loss_func,
         comp_angles=comp_angles,
@@ -434,15 +432,6 @@ def next_epoch(
             {
                 "angle/angle": test_metrics[2],
                 "angle/OSE": train_results[-1],
-            },
-            step=epoch,
-        )
-
-    if meta_optimizer:
-        wandb.log(
-            {
-                "weights/weight mu": train_results[2],
-                "weights/bias mu": train_results[3],
             },
             step=epoch,
         )
@@ -475,7 +464,6 @@ def train(
     device,
     train_loader,
     optimizer,
-    meta_optimizer,
     epoch,
     loss_func,
     comp_angles=False,
@@ -523,17 +511,6 @@ def train(
 
         optimizer.step()
 
-        if meta_optimizer is not None:
-            weight_mu.append(model.state_dict().get("network.1.weight_mu"))
-            weight_mu[-1] = torch.linalg.vector_norm(weight_mu[-1]) / torch.numel(
-                weight_mu[-1]
-            )
-
-            bias_mu.append(model.state_dict().get("network.1.bias_mu"))
-            bias_mu[-1] = torch.linalg.vector_norm(bias_mu[-1]) / torch.numel(
-                bias_mu[-1]
-            )
-
         if (batch_idx % log_interval == 0) and loud:
             print(
                 "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
@@ -549,11 +526,6 @@ def train(
 
     train_results = [loss, (100.0 * batch_idx / len(train_loader.dataset))]
 
-    if meta_optimizer:
-        weight_mu = torch.Tensor(weight_mu).to(device).mean()
-        bias_mu = torch.Tensor(bias_mu).to(device).mean()
-        train_results.append(weight_mu)
-        train_results.append(bias_mu)
     if comp_angles:
         ose = (wp_loss[0] - wp_loss[1]) / (
             bp_loss[0] - bp_loss[1] + 1e-16
