@@ -18,7 +18,6 @@ class WPLinearFunc(torch.autograd.Function):
         dist_sampler,
         num_perts,
         batch_size,
-        first_layer,
         device,
     ):
 
@@ -41,29 +40,20 @@ class WPLinearFunc(torch.autograd.Function):
         w_noise = WPLinearFunc.sample_noise(dist_sampler, w_noise_shape, sigma)
 
         if "ffd" in pert_type.lower():
-            output[:batch_size] += torch.mm(input[:batch_size], weight.t())
+            output[:batch_size] += torch.mm(input[:batch_size], weight.t())  # f(w*x)
             output[batch_size:] += WPLinearFunc.add_noise(
                 input[batch_size:], torch.add(weight, w_noise)
-            )
+            )  # f((w+h) * x)
 
         elif "cfd" in pert_type.lower():
-            halfway = batch_size * num_perts
-            if first_layer:
-                perturbation = WPLinearFunc.add_noise(
-                    input[:halfway], torch.add(weight, w_noise)
-                )
-                output[:halfway], output[halfway:] = (
-                    perturbation,
-                    -perturbation,
-                )
 
-            else:
-                output[:halfway] = WPLinearFunc.add_noise(
-                    input[:halfway], torch.add(weight, w_noise)
-                )
-                output[halfway:] = WPLinearFunc.add_noise(
-                    input[halfway:], torch.subtract(weight, w_noise)
-                )
+            halfway = batch_size * num_perts
+            output[:halfway] += WPLinearFunc.add_noise(
+                torch.add(weight, w_noise), input[:halfway]
+            )  # f((w+h) * x)
+            output[halfway:] += WPLinearFunc.add_noise(
+                torch.subtract(weight, w_noise), input[halfway:]
+            )  # f((w-h) * x)
 
         else:
             raise ValueError("Other weight perturbation types not yet implemented.")
@@ -98,16 +88,15 @@ class WPLinearFunc(torch.autograd.Function):
         return output, seed, square_norm
 
     @staticmethod
-    def add_noise(inputs: torch.Tensor, noisy_weight: torch.Tensor):
+    def add_noise(noisy_weight: torch.Tensor, inputs: torch.Tensor):
         """Adds noise to the weight"""
 
         num_perts = noisy_weight.shape[0]
         elements_per_batch = int(inputs.shape[0] / noisy_weight.shape[0])
-        reshaped_inputs = inputs.view(num_perts, elements_per_batch, -1)
+        reshaped_inputs = inputs.reshape(num_perts, elements_per_batch, -1)
         outputs = torch.einsum("boi,bni->bno", noisy_weight, reshaped_inputs).reshape(
             num_perts * elements_per_batch, -1
         )
-
         return outputs
 
     @staticmethod
@@ -131,7 +120,6 @@ class WPLinear(torch.nn.Linear):
         sigma,
         num_perts: int = 1,
         device: str = "cuda:0",
-        first_layer: bool = False,
         zero_masking: bool = True,
         **kwargs,
     ) -> None:
@@ -143,7 +131,6 @@ class WPLinear(torch.nn.Linear):
         self.seed = None
         self.num_perts = num_perts
         self.first_gradient = True
-        self.first_layer = first_layer
         self.zero_masking = zero_masking
         self.device = device
         self.sigma = sigma
@@ -171,7 +158,6 @@ class WPLinear(torch.nn.Linear):
                 self.dist_sampler,
                 self.num_perts,
                 self.batch_size,
-                self.first_layer,
                 self.device,
             )
             if self.zero_masking:
