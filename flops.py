@@ -67,10 +67,9 @@ def mul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     # Inputs should be a list of length 2.
     # Inputs contains the shapes of two matrices.
     assert len(inputs) == 2, inputs
-
-    input_shapes = torch.cat(
-        (torch.tensor(inputs[0].shape), torch.tensor(inputs[1].shape))
-    )
+    in1 = torch.tensor(inputs[0])
+    in2 = torch.tensor(inputs[1])
+    input_shapes = torch.cat((torch.tensor(in1.shape), torch.tensor(in2.shape)))
     input_shapes = input_shapes.unique()
     return torch.prod(input_shapes.unique())
 
@@ -284,7 +283,7 @@ def getBack(var_grad_fn):
 def FLOP_step_track(dataset, network, device, out_shape, loss_func):
 
     train_loader, _, _, out_shape = utils.construct_dataloaders(
-        dataset, 1, device, validation=True
+        dataset, 8, device, validation=True
     )
 
     # print(dict(network.named_modules()))
@@ -295,12 +294,19 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
         data, target = data.to(device), target.to(device)
         # _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
 
-        _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+        loss1, loss_differential = network.test_step(data, target, onehots, loss_func)
+        # print("loss on clean FFD pass - test")
+        # print(loss1)
+        loss, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+        # print("loss on clean FFD pass - training")
+
+        # print(loss)
+        # print(torch.sqrt(torch.sum(torch.pow(torch.subtract(loss1, loss), 2))))
 
         if type(loss_differential) != torch.Tensor:
             loss_differential = torch.tensor(loss_differential)
 
-        if batch_idx == 10:
+        if batch_idx == 5:
 
             flop_counter = FlopCounterMode(network, loud=False)
             with flop_counter:
