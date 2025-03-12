@@ -24,9 +24,12 @@ class WPLinearFunc(torch.autograd.Function):
         assert num_perts > 0, "Number of perturbations should never be zero"
         assert batch_size > 0, "Batch size must be non-zero"
 
-        output = torch.zeros(
-            size=(input.shape[0], weight.shape[0]), device=device
-        )  # of shape [batch size, output size]
+        if (
+            bias is not None
+        ):  # Initialize matrix of shape [batch size, output size]. Prefilled with biases, if they exist.
+            output = torch.tile(bias, (input.shape[0], 1))
+        else:
+            output = torch.zeros(size=(input.shape[0], weight.shape[0]), device=device)
 
         seed = torch.randint(-int(1e10), int(1e10), size=(1,))
         torch.manual_seed(seed)
@@ -42,7 +45,7 @@ class WPLinearFunc(torch.autograd.Function):
         if "ffd" in pert_type.lower():
             output[:batch_size] += torch.mm(input[:batch_size], weight.t())  # f(w*x)
             output[batch_size:] += WPLinearFunc.add_noise(
-                input[batch_size:], torch.add(weight, w_noise)
+                torch.add(weight, w_noise), input[batch_size:]
             )  # f((w+h) * x)
 
         elif "cfd" in pert_type.lower():
@@ -51,6 +54,7 @@ class WPLinearFunc(torch.autograd.Function):
             output[:halfway] += WPLinearFunc.add_noise(
                 torch.add(weight, w_noise), input[:halfway]
             )  # f((w+h) * x)
+
             output[halfway:] += WPLinearFunc.add_noise(
                 torch.subtract(weight, w_noise), input[halfway:]
             )  # f((w-h) * x)
@@ -66,18 +70,12 @@ class WPLinearFunc(torch.autograd.Function):
             b_noise = WPLinearFunc.sample_noise(dist_sampler, b_noise_shape, sigma)
 
             if "ffd" in pert_type.lower():
-                output[batch_size:] += torch.tile(
-                    torch.add(bias, b_noise), (batch_size, 1)
-                )
+                output[batch_size:] += torch.tile(b_noise, (batch_size, 1))
 
             elif "cfd" in pert_type.lower():
 
-                output[:halfway] += torch.tile(
-                    torch.add(bias, b_noise), (batch_size, 1)
-                )
-                output[halfway:] -= torch.tile(
-                    torch.add(bias, b_noise), (batch_size, 1)
-                )
+                output[:halfway] += torch.tile(b_noise, (batch_size, 1))
+                output[halfway:] -= torch.tile(b_noise, (batch_size, 1))
             else:
                 raise ValueError("Other bias perturbation types not yet implemented.")
             square_norm += torch.sum(b_noise**2, dim=1)
