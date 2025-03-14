@@ -1,14 +1,14 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
-entity: brai-lab
-name:  3-layer validation sweep, 2,4,16 perts, with momentum, CIFAR10 
+entity: brai-lab 
+name:  3-layer validation sweep, momentum, CIFAR10, [1,32] perturbations, no zero masking
 method: grid
 metric:
   goal: maximize
   name: validation/acc
 parameters:
     learning_rate:
-        values:
+        values:    
         - 2**-15
         - 2**-16
         - 2**-17
@@ -23,7 +23,7 @@ parameters:
     algorithm:
         values: ["FFD", "CFD"]
     num_perts:
-        values: [2,16]
+        values: [1, 32]
     sigma:
         values: 
         - 2**-12
@@ -59,8 +59,10 @@ parameters:
         - 0.99
     dampening:
         value: False 
-    nesterov: 
-        values: [False, True]
+    zero_masking:
+        value: False
+    nesterov:
+        value: False
 
 
 command:

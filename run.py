@@ -8,7 +8,6 @@ import torch
 import utils
 import wandb
 import hydra
-import flops
 from wp import WPLinear
 from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
@@ -60,6 +59,30 @@ def run(config) -> None:
             torch.nn.Flatten(),
             WPLinear(
                 in_shape,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                num_perts=config.num_perts,
+                device=config.device,
+                zero_masking=config.zero_masking,
+            ),
+            torch.nn.ReLU(),
+            WPLinear(
+                500,
+                500,
+                bias=config.bias,
+                pert_type=config.algorithm,
+                dist_sampler=dist_sampler,
+                sigma=sigma,
+                num_perts=config.num_perts,
+                device=config.device,
+                zero_masking=config.zero_masking,
+            ),
+            torch.nn.ReLU(),
+            WPLinear(
+                500,
                 out_shape,
                 bias=config.bias,
                 pert_type=config.algorithm,
@@ -127,9 +150,11 @@ def run(config) -> None:
         loss_func = (
             lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
         )
+    else:
+        raise ValueError()
 
     # measuring speed of one pass
-    # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func)
+    # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func, config.algorithm, config.num_perts)
 
     # main training loop
     with tqdm(range(config.nb_epochs)) as t:
@@ -159,8 +184,15 @@ def run(config) -> None:
 
             if (
                 config.validation
-                and (e == 15 and metrics["test"]["acc"][-1] < 20)
-                or metrics["test"]["loss"][-1] > 5
+                and (e == 25 and metrics["test"]["acc"][-1] < 20)
+                or metrics["test"]["loss"][-1] > 2.8
+            ):  # early stopping, but only when not testing.
+                print(
+                    "Network is not learning fast enough, or has too high of a loss, aborting training"
+                )
+                break
+            if config.validation and (
+                e == 50 and metrics["test"]["acc"][-1] < 24
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"
