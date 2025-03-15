@@ -274,10 +274,6 @@ def BP_linear_flops(layer, num_perts, algorithm):
         torch.prod(weight_shape) * 2 + bias_shape
     )  # assumes a batch size of 1, for a matrix multiplication of [1, input] vs [input, output]. Bias is also added, which costs [output] flops.
     backward_pass_flops = torch.prod(weight_shape) * 2 + bias_shape
-    print(forward_pass_flops)
-    print(backward_pass_flops)
-
-    print("this is linear layer")
     return (
         forward_pass_flops,
         backward_pass_flops,
@@ -312,87 +308,88 @@ def WP_linear_flops(layer, num_perts, algorithm):
         + bias_shape
     )  # Matrix multiplication with shapes [1, input] vs [num_forw_passes, input, output]. Assumes a batch size of 1.
 
+    num_perts = torch.tensor(num_perts).reshape(1)
+
     # Assumes that masking does not happen! Also ignores the cost of summing the loss over the batch.
     backward_pass_flops = (
-        torch.prod(torch.cat((torch.tensor(num_perts).reshape(1), weight_shape)))
-        + num_perts * bias_shape
+        torch.prod(torch.cat((weight_shape, num_perts))) + num_perts * bias_shape
     )  # cost of elementwise multiplication, leading to a broadcasted matrix of [num_perts, input, output]
 
-    print(weight_shape)
     if num_perts > 1:
         backward_pass_flops += (
-            torch.prod(torch.cat(weight_shape, num_perts)) + num_perts * bias_shape
+            torch.prod(torch.cat((weight_shape, num_perts))) + num_perts * bias_shape
         )
         # cost of meaning operation for weights and biases. Assumes that pytorch does not actually perform meaning when there is only one element to mean over.
+    print(forward_pass_flops)
+    print(forward_pass_flops[0])
 
     print("this is WP linear layer")
     return (
-        forward_pass_flops,
-        backward_pass_flops,
-        forward_pass_flops + backward_pass_flops,
+        forward_pass_flops[0],
+        backward_pass_flops[0],
+        forward_pass_flops[0] + backward_pass_flops[0],
     )
 
 
 layer_mapping = {torch.nn.Linear: BP_linear_flops, wp.WPLinear: WP_linear_flops}
 
 
-def FLOP_step_track(
-    dataset,
+def FLOP_abstract_track(algorithm, num_perts, network):
+
+    forward_pass_flops = 0
+    backward_pass_flops = 0
+    total_flops = 0
+    for layer in network.modules():
+        if type(layer) in layer_mapping:
+            flops = layer_mapping[type(layer)](layer, num_perts, algorithm)
+            print(flops)
+            forward_pass_flops, backward_pass_flops, total_flops = (
+                forward_pass_flops + flops[0],
+                backward_pass_flops + flops[1],
+                total_flops + flops[2],
+            )
+    return [forward_pass_flops, backward_pass_flops, total_flops]
+
+
+def FLOP_real_track(
     network,
     device,
+    dataset,
     out_shape,
     loss_func,
-    algorithm,
-    num_perts,
-    abstract: bool = True,
 ):
 
-    if abstract:
-        forward_pass_flops = 0
-        backward_pass_flops = 0
-        total_flops = 0
-        for layer in network.network.modules():
-            if type(layer) in layer_mapping:
-                forward_pass_flops, backward_pass_flops, total_flops += layer_mapping[
-                    type(layer)
-                ](layer, num_perts, algorithm)
-                print(layer)
-    else:
-        train_loader, _, _, out_shape = utils.construct_dataloaders(
-            dataset, 1, device, validation=True
+    train_loader, _, _, out_shape = utils.construct_dataloaders(
+        dataset, 1, device, validation=True
+    )
+
+    # print(dict(network.named_modules()))
+    for batch_idx, (data, target) in enumerate(train_loader):
+        onehots = (
+            torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
         )
+        data, target = data.to(device), target.to(device)
+        # _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
 
-        # print(dict(network.named_modules()))
-        for batch_idx, (data, target) in enumerate(train_loader):
-            onehots = (
-                torch.nn.functional.one_hot(target, out_shape).to(device).to(data.dtype)
-            )
-            data, target = data.to(device), target.to(device)
-            # _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+        loss1, loss_differential = network.test_step(data, target, onehots, loss_func)
+        # print("loss on clean FFD pass - test")
+        # print(loss1)
+        loss, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+        # print("loss on clean FFD pass - training")
 
-            loss1, loss_differential = network.test_step(
-                data, target, onehots, loss_func
-            )
-            # print("loss on clean FFD pass - test")
-            # print(loss1)
-            loss, loss_differential = network.forward_pass(
-                data, target, onehots, loss_func
-            )
-            # print("loss on clean FFD pass - training")
+        # print(loss)
+        # print(torch.sqrt(torch.sum(torch.pow(torch.subtract(loss1, loss), 2))))
 
-            # print(loss)
-            # print(torch.sqrt(torch.sum(torch.pow(torch.subtract(loss1, loss), 2))))
+        if type(loss_differential) != torch.Tensor:
+            loss_differential = torch.tensor(loss_differential)
 
-            if type(loss_differential) != torch.Tensor:
-                loss_differential = torch.tensor(loss_differential)
+        if batch_idx == 5:
 
-            if batch_idx == 5:
+            flop_counter = FlopCounterMode(network, loud=False)
+            with flop_counter:
+                network.train_step(data, target, onehots, loss_func)
+                # network.forward_pass(data, target, onehots, loss_func)
+                # network.backward_pass(loss_differential)
+            exit(0)
 
-                flop_counter = FlopCounterMode(network, loud=False)
-                with flop_counter:
-                    network.train_step(data, target, onehots, loss_func)
-                    # network.forward_pass(data, target, onehots, loss_func)
-                    # network.backward_pass(loss_differential)
-                exit(0)
-
-                # wandb.log({"FLOPS": flops}, step=0)
+            # wandb.log({"FLOPS": flops}, step=0)
