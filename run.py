@@ -8,7 +8,6 @@ import torch
 import utils
 import wandb
 import hydra
-import flops
 from wp import WPLinear
 from net import PerturbNet, BPNet
 from omegaconf import OmegaConf, DictConfig
@@ -67,62 +66,98 @@ def run(config) -> None:
     # Define network
     network = None
     if "ffd" in config.algorithm.lower() or "cfd" in config.algorithm.lower():
-        dist_sampler = utils.make_dist_sampler(config.distribution, device)
-
-        model = torch.nn.Sequential(
-            torch.nn.Flatten(),
-            WPLinear(
-                in_shape,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-                device=config.device,
-                first_layer=True,
-                zero_masking=config.zero_masking,
-            ),
-            torch.nn.ReLU(),
-            WPLinear(
-                500,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-                device=config.device,
-                zero_masking=config.zero_masking,
-            ),
-            torch.nn.ReLU(),
-            WPLinear(
-                500,
-                out_shape,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                mu_scaling_factor=mu_scaling_factor,
-                num_perts=config.num_perts,
-                meta_lr=config.momentum,
-                device=config.device,
-                zero_masking=config.zero_masking,
-            ),
-        ).to(device)
-
-        model_bp = (
-            torch.nn.Sequential(
-                torch.nn.Flatten(),
-                torch.nn.Linear(in_shape, out_shape),
-            ).to(device)
-            if config.comp_angles
-            else None
+        dist_sampler = utils.make_dist_sampler(
+            config.distribution,
+            device,
         )
+
+        if config.num_layers == 1:
+            model = torch.nn.Sequential(
+                torch.nn.Flatten(),
+                WPLinear(
+                    in_shape,
+                    out_shape,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
+                    mu_scaling_factor=mu_scaling_factor,
+                    meta_lr=config.meta_learning_rate,
+                ),
+            ).to(device)
+            model_bp = (
+                torch.nn.Sequential(
+                    torch.nn.Flatten(),
+                    torch.nn.Linear(in_shape, out_shape),
+                ).to(device)
+                if config.comp_angles
+                else None
+            )
+        else:
+            model = torch.nn.Sequential(
+                torch.nn.Flatten(),
+                WPLinear(
+                    in_shape,
+                    500,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
+                    mu_scaling_factor=mu_scaling_factor,
+                    meta_lr=config.meta_learning_rate,
+                ),
+                torch.nn.ReLU(),
+                WPLinear(
+                    500,
+                    500,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
+                    mu_scaling_factor=mu_scaling_factor,
+                    meta_lr=config.meta_learning_rate,
+                ),
+                torch.nn.ReLU(),
+                WPLinear(
+                    500,
+                    out_shape,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
+                    mu_scaling_factor=mu_scaling_factor,
+                    meta_lr=config.meta_learning_rate,
+                ),
+            ).to(device)
+
+            model_bp = (
+                torch.nn.Sequential(
+                    torch.nn.Flatten(),
+                    torch.nn.Linear(in_shape, 500),
+                    torch.nn.ReLU(),
+                    torch.nn.Linear(500, 500),
+                    torch.nn.ReLU(),
+                    torch.nn.Linear(500, out_shape),
+                ).to(device)
+                if config.comp_angles
+                else None
+            )
 
         network = PerturbNet(
             network=model,
@@ -130,36 +165,34 @@ def run(config) -> None:
             pert_type=config.algorithm,
             BP_network=model_bp,
         )
-        regular_weights = []
-        meta_weights = []
-
-        # If comp angles, optimizer should update both BP and WP model, so we need to iterate through network.named_params
-
-        param_list = (
-            network.named_parameters()
-            if config.comp_angles
-            else model.named_parameters()
-        )
-
-        for name, param in param_list:
-            if name.endswith("mu") or name.endswith("sigma"):
-                meta_weights.append(param)
-            else:
-                regular_weights.append(param)
 
     elif config.algorithm.lower() == "bp":
         config.comp_angles = (
             False  # BP networks do not need to compare angles with BP updates
         )
-
         model = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(in_shape, out_shape),
         ).to(device)
-
         network = BPNet(model)
+
     # Initialize metric storage
     metrics = utils.init_metric(config.comp_angles)
+
+    regular_weights = []
+    meta_weights = []
+
+    # If comp angles, optimizer should update both BP and WP model, so we need to iterate through network.named_params
+
+    param_list = (
+        network.named_parameters() if config.comp_angles else model.named_parameters()
+    )
+
+    for name, param in param_list:
+        if name.endswith("mu") or name.endswith("sigma"):
+            meta_weights.append(param)
+        else:
+            regular_weights.append(param)
 
     # Define optimizers
     fwd_optimizer = None
@@ -168,28 +201,13 @@ def run(config) -> None:
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     elif config.optimizer_type.lower() == "sgd":
-
-        # What should be updated
-        # If BP, just model.params()
-        # If WP and not meta and not Angles, network.params()
-        # IF WP and meta but not angle, model.regular_weights and meta_weights
-        # If WP and meta and angles, network. regular params and meta_weights
-
-        if config.algorithm.lower() == "bp":
-            fwd_optimizer = torch.optim.SGD(
-                model.parameters(),
-                lr,
-                momentum=config.momentum,
-                dampening=config.momentum if config.dampening else 0,
-                nesterov=config.Nestorov,
-            )
-        else:
-            fwd_optimizer = torch.optim.SGD(
-                regular_weights,
-                lr,
-                momentum=config.momentum,
-                dampening=config.momentum if config.dampening else 0,
-            )
+        fwd_optimizer = torch.optim.SGD(
+            regular_weights,
+            lr,
+            momentum=config.momentum,
+            dampening=config.momentum if config.dampening else 0,
+            nesterov=config.nesterov,
+        )
 
     # Choose Loss function
     if config.loss_func.lower() == "cce":
@@ -200,9 +218,11 @@ def run(config) -> None:
         loss_func = (
             lambda input, target, onehot: loss_obj(input, onehot).mean(axis=1).float()
         )
+    else:
+        raise ValueError()
 
     # measuring speed of one pass
-    # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func)
+    # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func, config.algorithm, config.num_perts)
 
     # main training loop
     with tqdm(range(config.nb_epochs)) as t:
@@ -217,6 +237,7 @@ def run(config) -> None:
                 train_loader,
                 loss_func,
                 e,
+                config.bias,
                 loud_test=config.loud_test,
                 loud_train=config.loud_train,
                 comp_angles=config.comp_angles,
@@ -230,10 +251,16 @@ def run(config) -> None:
                 print("NaN detected, aborting training")
                 break
 
-            if (
-                config.validation
-                and (e == 15 and metrics["test"]["acc"][-1] < 20)
-                or metrics["test"]["loss"][-1] > 2.6
+            if config.validation and (
+                (e == 25 and metrics["test"]["acc"][-1] < 20)
+                or metrics["test"]["loss"][-1] > 2.8
+            ):  # early stopping, but only when not testing.
+                print(
+                    "Network is not learning fast enough, or has too high of a loss, aborting training"
+                )
+                break
+            if config.validation and (
+                e == 50 and metrics["test"]["acc"][-1] < 24
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"

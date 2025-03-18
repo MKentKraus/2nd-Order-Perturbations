@@ -1,6 +1,5 @@
 import torch
-import cProfile, pstats, io
-from pstats import SortKey
+import wp
 from torch.utils._pytree import tree_map, tree_flatten
 from typing import List, Any
 from numbers import Number
@@ -67,10 +66,9 @@ def mul_flop(inputs: List[Any], outputs: List[Any]) -> Number:
     # Inputs should be a list of length 2.
     # Inputs contains the shapes of two matrices.
     assert len(inputs) == 2, inputs
-
-    input_shapes = torch.cat(
-        (torch.tensor(inputs[0].shape), torch.tensor(inputs[1].shape))
-    )
+    in1 = torch.tensor(inputs[0])
+    in2 = torch.tensor(inputs[1])
+    input_shapes = torch.cat((torch.tensor(in1.shape), torch.tensor(in2.shape)))
     input_shapes = input_shapes.unique()
     return torch.prod(input_shapes.unique())
 
@@ -267,21 +265,96 @@ class FlopCounterMode(TorchDispatchMode):
         return out
 
 
-def getBack(var_grad_fn):
-    # helper function which helps corroborate whether FlopCounterMode missed any function calls. Used for debugging. Used as getBack(loss_differential.grad_fn)
-    print(var_grad_fn)
-    for n in var_grad_fn.next_functions:
-        if n[0]:
-            try:
-                tensor = getattr(n[0], "variable")
-                print(n[0])
-                print()
-                print("Tensor with grad found:", tensor.shape)
-            except AttributeError as e:
-                getBack(n[0])
+def BP_linear_flops(layer, num_perts, algorithm):
+    # Function to count flops of nn.Linear. Does not associate any costs with calculating the loss or the optimizer step.
+    weight_shape = torch.tensor(layer.weight.shape)
+    bias_shape = torch.tensor(layer.bias.shape)
+
+    forward_pass_flops = (
+        torch.prod(weight_shape) * 2 + bias_shape
+    )  # assumes a batch size of 1, for a matrix multiplication of [1, input] vs [input, output]. Bias is also added, which costs [output] flops.
+    backward_pass_flops = torch.prod(weight_shape) * 2 + bias_shape
+    return (
+        forward_pass_flops[0],
+        backward_pass_flops[0],
+        forward_pass_flops[0] + backward_pass_flops[0],
+    )
 
 
-def FLOP_step_track(dataset, network, device, out_shape, loss_func):
+def WP_linear_flops(layer, num_perts, algorithm):
+    # Function to count flops of nn.Linear. Does not associate any costs with calculating the loss, the optimizer step or how the perturbations are sampled. It does however include the cost of adding the perturbations
+
+    weight_shape = torch.tensor(layer.weight.shape)
+    bias_shape = torch.tensor(layer.bias.shape)
+    if algorithm.lower() == "ffd":
+        num_forw_passes = (
+            num_perts + 1
+        )  # ffd consists of one clean pass, plus num_pert passes.
+        weight_perturbation = num_perts * torch.prod(
+            weight_shape
+        )  # the cost of adding perturbations to the weights
+        bias_perturbation = num_perts * bias_shape
+    elif algorithm.lower() == "cfd":
+        num_forw_passes = num_perts * 2  # cfd needs two forward passes per perturbation
+        weight_perturbation = num_perts * torch.prod(weight_shape) * 2
+        bias_perturbation = num_perts * bias_shape * 2
+    else:
+        raise ValueError("only ffd and cfd flops are currently supported")
+
+    forward_pass_flops = (
+        (torch.prod(weight_shape) * 2 * num_forw_passes)
+        + weight_perturbation
+        + bias_perturbation
+        + bias_shape
+    )  # Matrix multiplication with shapes [1, input] vs [num_forw_passes, input, output]. Assumes a batch size of 1.
+
+    num_perts = torch.tensor(num_perts).reshape(1)
+
+    # Assumes that masking does not happen! Also ignores the cost of summing the loss over the batch.
+    backward_pass_flops = (
+        torch.prod(torch.cat((weight_shape, num_perts))) + num_perts * bias_shape
+    )  # cost of elementwise multiplication, leading to a broadcasted matrix of [num_perts, input, output]
+
+    if num_perts > 1:
+        backward_pass_flops += (
+            torch.prod(torch.cat((weight_shape, num_perts))) + num_perts * bias_shape
+        )
+        # cost of meaning operation for weights and biases. Assumes that pytorch does not actually perform meaning when there is only one element to mean over.
+
+    print("this is WP linear layer")
+    return (
+        forward_pass_flops[0],
+        backward_pass_flops[0],
+        forward_pass_flops[0] + backward_pass_flops[0],
+    )
+
+
+layer_mapping = {torch.nn.Linear: BP_linear_flops, wp.WPLinear: WP_linear_flops}
+
+
+def FLOP_abstract_track(algorithm, num_perts, network):
+
+    forward_pass_flops = 0
+    backward_pass_flops = 0
+    total_flops = 0
+    for layer in network.modules():
+        if type(layer) in layer_mapping:
+            flops = layer_mapping[type(layer)](layer, num_perts, algorithm)
+            forward_pass_flops, backward_pass_flops, total_flops = (
+                forward_pass_flops + flops[0],
+                backward_pass_flops + flops[1],
+                total_flops + flops[2],
+            )
+    return [forward_pass_flops, backward_pass_flops, total_flops]
+
+
+def FLOP_real_track(
+    network,
+    device,
+    dataset,
+    out_shape,
+    loss_func,
+):
 
     train_loader, _, _, out_shape = utils.construct_dataloaders(
         dataset, 1, device, validation=True
@@ -295,12 +368,19 @@ def FLOP_step_track(dataset, network, device, out_shape, loss_func):
         data, target = data.to(device), target.to(device)
         # _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
 
-        _, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+        loss1, loss_differential = network.test_step(data, target, onehots, loss_func)
+        # print("loss on clean FFD pass - test")
+        # print(loss1)
+        loss, loss_differential = network.forward_pass(data, target, onehots, loss_func)
+        # print("loss on clean FFD pass - training")
+
+        # print(loss)
+        # print(torch.sqrt(torch.sum(torch.pow(torch.subtract(loss1, loss), 2))))
 
         if type(loss_differential) != torch.Tensor:
             loss_differential = torch.tensor(loss_differential)
 
-        if batch_idx == 10:
+        if batch_idx == 5:
 
             flop_counter = FlopCounterMode(network, loud=False)
             with flop_counter:

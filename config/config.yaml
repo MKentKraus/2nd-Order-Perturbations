@@ -1,6 +1,6 @@
 #Setup 
 nb_epochs: 100
-bias: True
+bias: False
 dataset: "CIFAR10"
 batch_size: 128
 seed: 42
@@ -17,25 +17,19 @@ optimizer_type: "sgd" #sgd or adam
 distribution: "normal"
 loss_func: "cce" #CCE or MSE
 learning_rate: "2**-20"
-num_perts: 1
-algorithm: "CFD" #ffd, cfd or bp
-sigma: "2**-5"
-meta_learning_rate: 0
-mu_scaling_factor: 0
+num_perts: 32
+algorithm: "ffd" #ffd, cfd or bp
+sigma: "2**-16"
 momentum: 0
 dampening: False
 nesterov: False
 zero_masking: False
+num_layers: 3
+orthogonal_perts: False
 
 #Wandb
 project: MetaWP
 entity: brai-lab
 name: 
 mode: "offline"
-
-
-
-
-
-
 
