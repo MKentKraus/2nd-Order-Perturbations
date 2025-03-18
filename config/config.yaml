@@ -24,10 +24,11 @@ momentum: 0
 dampening: False
 nesterov: False
 zero_masking: False
+num_layers: 1
 
 #Wandb
 project: MetaWP
 entity: brai-lab
 name: 
-mode: "online"
+mode: "offline"
 

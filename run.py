@@ -55,53 +55,81 @@ def run(config) -> None:
     if "ffd" in config.algorithm.lower() or "cfd" in config.algorithm.lower():
         dist_sampler = utils.make_dist_sampler(config.distribution, device)
 
-        model = torch.nn.Sequential(
-            torch.nn.Flatten(),
-            WPLinear(
-                in_shape,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                num_perts=config.num_perts,
-                device=config.device,
-                zero_masking=config.zero_masking,
-            ),
-            torch.nn.ReLU(),
-            WPLinear(
-                500,
-                500,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                num_perts=config.num_perts,
-                device=config.device,
-                zero_masking=config.zero_masking,
-            ),
-            torch.nn.ReLU(),
-            WPLinear(
-                500,
-                out_shape,
-                bias=config.bias,
-                pert_type=config.algorithm,
-                dist_sampler=dist_sampler,
-                sigma=sigma,
-                num_perts=config.num_perts,
-                device=config.device,
-                zero_masking=config.zero_masking,
-            ),
-        ).to(device)
-
-        model_bp = (
-            torch.nn.Sequential(
+        if config.num_layers == 1:
+            model = torch.nn.Sequential(
                 torch.nn.Flatten(),
-                torch.nn.Linear(in_shape, out_shape),
+                WPLinear(
+                    in_shape,
+                    out_shape,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                ),
             ).to(device)
-            if config.comp_angles
-            else None
-        )
+            model_bp = (
+                torch.nn.Sequential(
+                    torch.nn.Flatten(),
+                    torch.nn.Linear(in_shape, out_shape),
+                ).to(device)
+                if config.comp_angles
+                else None
+            )
+        else:
+            model = torch.nn.Sequential(
+                torch.nn.Flatten(),
+                WPLinear(
+                    in_shape,
+                    500,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                ),
+                torch.nn.ReLU(),
+                WPLinear(
+                    500,
+                    500,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                ),
+                torch.nn.ReLU(),
+                WPLinear(
+                    500,
+                    out_shape,
+                    bias=config.bias,
+                    pert_type=config.algorithm,
+                    dist_sampler=dist_sampler,
+                    sigma=sigma,
+                    num_perts=config.num_perts,
+                    device=config.device,
+                    zero_masking=config.zero_masking,
+                ),
+            ).to(device)
+
+            model_bp = (
+                torch.nn.Sequential(
+                    torch.nn.Flatten(),
+                    torch.nn.Linear(in_shape, 500),
+                    torch.nn.ReLU(),
+                    torch.nn.Linear(500, 500),
+                    torch.nn.ReLU(),
+                    torch.nn.Linear(500, out_shape),
+                ).to(device)
+                if config.comp_angles
+                else None
+            )
 
         network = PerturbNet(
             network=model,
