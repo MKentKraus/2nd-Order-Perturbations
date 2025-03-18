@@ -275,9 +275,9 @@ def BP_linear_flops(layer, num_perts, algorithm):
     )  # assumes a batch size of 1, for a matrix multiplication of [1, input] vs [input, output]. Bias is also added, which costs [output] flops.
     backward_pass_flops = torch.prod(weight_shape) * 2 + bias_shape
     return (
-        forward_pass_flops,
-        backward_pass_flops,
-        forward_pass_flops + backward_pass_flops,
+        forward_pass_flops[0],
+        backward_pass_flops[0],
+        forward_pass_flops[0] + backward_pass_flops[0],
     )
 
 
@@ -320,8 +320,6 @@ def WP_linear_flops(layer, num_perts, algorithm):
             torch.prod(torch.cat((weight_shape, num_perts))) + num_perts * bias_shape
         )
         # cost of meaning operation for weights and biases. Assumes that pytorch does not actually perform meaning when there is only one element to mean over.
-    print(forward_pass_flops)
-    print(forward_pass_flops[0])
 
     print("this is WP linear layer")
     return (
@@ -342,7 +340,6 @@ def FLOP_abstract_track(algorithm, num_perts, network):
     for layer in network.modules():
         if type(layer) in layer_mapping:
             flops = layer_mapping[type(layer)](layer, num_perts, algorithm)
-            print(flops)
             forward_pass_flops, backward_pass_flops, total_flops = (
                 forward_pass_flops + flops[0],
                 backward_pass_flops + flops[1],
