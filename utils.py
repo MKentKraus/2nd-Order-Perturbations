@@ -18,6 +18,7 @@ def make_dist_sampler(
 
     if distribution.lower() == "normal":
         dist_sampler = lambda x: (torch.empty(x, device=device).normal_(mean=0, std=1))
+
     elif distribution.lower() == "bernoulli":
         distribution = torch.distributions.Bernoulli(
             torch.tensor([0.5]).to(torch.float32).to(device)

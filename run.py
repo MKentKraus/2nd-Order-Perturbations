@@ -53,7 +53,10 @@ def run(config) -> None:
     # Define network
     network = None
     if "ffd" in config.algorithm.lower() or "cfd" in config.algorithm.lower():
-        dist_sampler = utils.make_dist_sampler(config.distribution, device)
+        dist_sampler = utils.make_dist_sampler(
+            config.distribution,
+            device,
+        )
 
         if config.num_layers == 1:
             model = torch.nn.Sequential(
@@ -68,6 +71,7 @@ def run(config) -> None:
                     num_perts=config.num_perts,
                     device=config.device,
                     zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
                 ),
             ).to(device)
             model_bp = (
@@ -91,6 +95,7 @@ def run(config) -> None:
                     num_perts=config.num_perts,
                     device=config.device,
                     zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
                 ),
                 torch.nn.ReLU(),
                 WPLinear(
@@ -103,6 +108,7 @@ def run(config) -> None:
                     num_perts=config.num_perts,
                     device=config.device,
                     zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
                 ),
                 torch.nn.ReLU(),
                 WPLinear(
@@ -115,6 +121,7 @@ def run(config) -> None:
                     num_perts=config.num_perts,
                     device=config.device,
                     zero_masking=config.zero_masking,
+                    orthogonal_perts=config.orthogonal_perts,
                 ),
             ).to(device)
 

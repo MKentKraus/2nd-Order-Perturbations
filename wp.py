@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+import scipy
 
 
 class WPLinearFunc(torch.autograd.Function):
@@ -19,6 +20,7 @@ class WPLinearFunc(torch.autograd.Function):
         num_perts,
         batch_size,
         device,
+        orthogonal_perts,
     ):
 
         assert num_perts > 0, "Number of perturbations should never be zero"
@@ -40,7 +42,9 @@ class WPLinearFunc(torch.autograd.Function):
             weight.shape
         )  # Whether the noise is shared for each element of the batch
 
-        w_noise = WPLinearFunc.sample_noise(dist_sampler, w_noise_shape, sigma)
+        w_noise = WPLinearFunc.sample_noise(
+            dist_sampler, w_noise_shape, sigma, orthogonal_perts
+        )
 
         if "ffd" in pert_type.lower():
             output[:batch_size] += torch.mm(input[:batch_size], weight.t())  # f(w*x)
@@ -67,7 +71,9 @@ class WPLinearFunc(torch.autograd.Function):
         # Perturb biases
         if bias is not None:
             b_noise_shape = [num_perts] + list(bias.shape)
-            b_noise = WPLinearFunc.sample_noise(dist_sampler, b_noise_shape, sigma)
+            b_noise = WPLinearFunc.sample_noise(
+                dist_sampler, b_noise_shape, sigma, orthogonal_perts
+            )
 
             if "ffd" in pert_type.lower():
                 output[batch_size:] += torch.tile(b_noise, (batch_size, 1))
@@ -98,8 +104,20 @@ class WPLinearFunc(torch.autograd.Function):
         return outputs
 
     @staticmethod
-    def sample_noise(sampler, shape, sigma):
-        noise = sampler(shape) * sigma
+    def sample_noise(sampler, shape, sigma, orthogonal_perts: bool = False):
+        if orthogonal_perts:
+            u, _, vh = torch.linalg.svd(sampler(shape), full_matrices=False)
+            noise = u @ vh * sigma
+
+            """
+            noise = torch.empty((shape))  # batch,
+            for i in range(shape[0]):
+                noise[i, :, :] = torch.tensor(
+                    scipy.stats.ortho_group.rvs(shape[2]).T[:500, :]
+                )
+            """
+        else:
+            noise = sampler(shape) * sigma
         return noise
 
     @staticmethod
@@ -119,6 +137,7 @@ class WPLinear(torch.nn.Linear):
         num_perts: int = 1,
         device: str = "cuda:0",
         zero_masking: bool = True,
+        orthogonal_perts: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -132,6 +151,7 @@ class WPLinear(torch.nn.Linear):
         self.zero_masking = zero_masking
         self.device = device
         self.sigma = sigma
+        self.orthogonal_perts = orthogonal_perts
 
     def __str__(self):
         return "WPLinear"
@@ -157,6 +177,7 @@ class WPLinear(torch.nn.Linear):
                 self.num_perts,
                 self.batch_size,
                 self.device,
+                self.orthogonal_perts,
             )
             if self.zero_masking:
                 self.mask = torch.where(input[: self.batch_size] != 0, 1.0, 0.0)
@@ -187,9 +208,9 @@ class WPLinear(torch.nn.Linear):
 
             scaled_weight_diff = torch.mul(
                 scaling_factor[:, :, None, :],
-                WPLinearFunc.sample_noise(self.dist_sampler, w_noise_shape, self.sigma)[
-                    None, :, :, :
-                ],
+                WPLinearFunc.sample_noise(
+                    self.dist_sampler, w_noise_shape, self.sigma, self.orthogonal_perts
+                )[None, :, :, :],
             )  # [batch, pert, in] * [1, pert, out, in]
 
             self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=0), dim=0)
@@ -200,7 +221,9 @@ class WPLinear(torch.nn.Linear):
             scaling_factor = torch.sum(scaling_factor, dim=0)
             scaled_weight_diff = torch.mul(
                 scaling_factor[:, None, None],
-                WPLinearFunc.sample_noise(self.dist_sampler, w_noise_shape, self.sigma),
+                WPLinearFunc.sample_noise(
+                    self.dist_sampler, w_noise_shape, self.sigma, self.orthogonal_perts
+                ),
             )
             self.weight.grad = torch.mean(scaled_weight_diff, axis=0)
         # scaled weight diff has shape num pert, output shape, input shape
@@ -211,7 +234,9 @@ class WPLinear(torch.nn.Linear):
 
             scaled_bias_diff = torch.mul(
                 scaling_factor[:, None],
-                WPLinearFunc.sample_noise(self.dist_sampler, b_noise_shape, self.sigma),
+                WPLinearFunc.sample_noise(
+                    self.dist_sampler, b_noise_shape, self.sigma, self.orthogonal_perts
+                ),
             )
 
             self.bias.grad = torch.mean(scaled_bias_diff, axis=0)
