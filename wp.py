@@ -347,8 +347,9 @@ class WPLinear(torch.nn.Linear):
                 self.first_gradient = False
 
             else:
+
                 self.weight_mu = (
-                    self.weight_mu * self.meta_lr
+                    torch.mul(self.weight_mu, self.meta_lr)
                     + (1 - self.meta_lr) * self.weight.grad
                 )
 

@@ -86,7 +86,7 @@ def run(config) -> None:
                     zero_masking=config.zero_masking,
                     orthogonal_perts=config.orthogonal_perts,
                     mu_scaling_factor=mu_scaling_factor,
-                    meta_lr=config.meta_learning_rate,
+                    meta_lr=meta_learning_rate,
                 ),
             ).to(device)
             model_bp = (
@@ -112,7 +112,7 @@ def run(config) -> None:
                     zero_masking=config.zero_masking,
                     orthogonal_perts=config.orthogonal_perts,
                     mu_scaling_factor=mu_scaling_factor,
-                    meta_lr=config.meta_learning_rate,
+                    meta_lr=meta_learning_rate,
                 ),
                 torch.nn.ReLU(),
                 WPLinear(
@@ -127,7 +127,7 @@ def run(config) -> None:
                     zero_masking=config.zero_masking,
                     orthogonal_perts=config.orthogonal_perts,
                     mu_scaling_factor=mu_scaling_factor,
-                    meta_lr=config.meta_learning_rate,
+                    meta_lr=meta_learning_rate,
                 ),
                 torch.nn.ReLU(),
                 WPLinear(
@@ -142,7 +142,7 @@ def run(config) -> None:
                     zero_masking=config.zero_masking,
                     orthogonal_perts=config.orthogonal_perts,
                     mu_scaling_factor=mu_scaling_factor,
-                    meta_lr=config.meta_learning_rate,
+                    meta_lr=meta_learning_rate,
                 ),
             ).to(device)
 
@@ -196,7 +196,6 @@ def run(config) -> None:
 
     # Define optimizers
     fwd_optimizer = None
-    meta_optimizer = True if "meta" in config.algorithm.lower() else None
 
     if config.optimizer_type.lower() == "adam":
         fwd_optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -232,7 +231,6 @@ def run(config) -> None:
                 metrics,
                 device,
                 fwd_optimizer,
-                meta_optimizer,
                 test_loader,
                 train_loader,
                 loss_func,
