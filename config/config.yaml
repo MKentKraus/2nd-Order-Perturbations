@@ -1,6 +1,6 @@
 #Setup 
 nb_epochs: 100
-bias: False
+bias: True
 dataset: "CIFAR10"
 batch_size: 128
 seed: 42
@@ -25,11 +25,11 @@ dampening: False
 nesterov: False
 zero_masking: False
 num_layers: 3
-orthogonal_perts: True
+orthogonal_perts: False
 
 #Wandb
 project: MetaWP
 entity: brai-lab
 name: 
-mode: "offline"
+mode: "online"
 

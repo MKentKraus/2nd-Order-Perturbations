@@ -218,7 +218,7 @@ def run(config) -> None:
                 break
 
             if config.validation and (
-                (e == 25 and metrics["test"]["acc"][-1] < 20)
+                (e == 20 and metrics["test"]["acc"][-1] < 20)
                 or metrics["test"]["loss"][-1] > 2.8
             ):  # early stopping, but only when not testing.
                 print(
