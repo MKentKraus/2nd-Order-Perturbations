@@ -1,7 +1,7 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab 
-name:  3-layer validation sweep, momentum, CIFAR10, [1,32] perturbations, no zero masking
+name:  1-layer FFD. 63 perturbations with best lr for 1 perturbation. Used in 1-32 perts experiment. Validation set.
 method: grid
 metric:
   goal: maximize
@@ -9,60 +9,38 @@ metric:
 parameters:
     learning_rate:
         values:    
-        - 2**-15
-        - 2**-16
-        - 2**-17
-        - 2**-18
-        - 2**-19
-        - 2**-20
-        - 2**-21
-        - 2**-22
-        - 2**-23
         - 2**-24
-        - 2**-25
     algorithm:
-        values: ["FFD", "CFD"]
+        value: "FFD"
     num_perts:
-        values: [1, 32]
+        value: 63
     sigma:
-        values: 
-        - 2**-12
-        - 2**-13
-        - 2**-14
-        - 2**-15
-        - 2**-16
-        - 2**-17
-        - 2**-18
-        - 2**-19
-        - 2**-20
-        - 2**-21
-        - 2**-22
-        - 2**-23
-        - 2**-24
-        - 2**-25
-    seed: 
-        value: 42
+        value: "2**-19"
+    seed:
+        values:
+        - 42
+        - 45
+        - 68
+        - 89
+        - 93
     nb_epochs:
         value: 100
     dataset:
         value: "CIFAR10"
     validation: 
         value: True
+    comp_angles:
+        value: True
     momentum: 
-        values:
-        - 0.01
-        - 0.1
-        - 0.3
-        - 0.5
-        - 0.7
-        - 0.9
-        - 0.99
+        value: 0
     dampening:
         value: False 
     zero_masking:
         value: False
     nesterov:
         value: False
+    num_layers: 
+        value: 1
 
 
 command:
