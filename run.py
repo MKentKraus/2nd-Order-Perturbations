@@ -97,7 +97,7 @@ def run(config) -> None:
                 if config.comp_angles
                 else None
             )
-        else:
+        elif config.num_layers == 3:
             model = torch.nn.Sequential(
                 torch.nn.Flatten(),
                 WPLinear(
@@ -250,7 +250,15 @@ def run(config) -> None:
                 break
 
             if config.validation and (
-                (e == 25 and metrics["test"]["acc"][-1] < 20)
+                e > 10 and metrics["test"]["acc"][-1] < 12
+            ):  # early stopping, but only when not testing.
+                print(
+                    "Network is not learning fast enough, or has too high of a loss, aborting training"
+                )
+                break
+
+            if config.validation and (
+                (e > 20 and metrics["test"]["acc"][-1] < 15)
                 or metrics["test"]["loss"][-1] > 2.8
             ):  # early stopping, but only when not testing.
                 print(
@@ -258,7 +266,13 @@ def run(config) -> None:
                 )
                 break
             if config.validation and (
-                e == 50 and metrics["test"]["acc"][-1] < 24
+                e > 50 and metrics["test"]["acc"][-1] < 24
+            ):  # early stopping, but only when not testing.
+                print(
+                    "Network is not learning fast enough, or has too high of a loss, aborting training"
+                )
+            if config.validation and (
+                (e > 100) and metrics["test"]["acc"][-1] < 29
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"

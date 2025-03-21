@@ -1,7 +1,7 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab 
-name:  3-layer validation sweep, momentum, CIFAR10, [1,32] perturbations, no zero masking
+name:  3-layer validation sweep for meta mean learning CIFAR10, 1 perturbation, 150 epochs and two seeds
 method: grid
 metric:
   goal: maximize
@@ -9,10 +9,6 @@ metric:
 parameters:
     learning_rate:
         values:    
-        - 2**-15
-        - 2**-16
-        - 2**-17
-        - 2**-18
         - 2**-19
         - 2**-20
         - 2**-21
@@ -21,16 +17,38 @@ parameters:
         - 2**-24
         - 2**-25
     algorithm:
-        values: ["FFD", "CFD"]
+        values: ["meta_FFD", "meta_CFD"]
     num_perts:
-        values: [1, 32]
+        values: [1]
     sigma:
         values: 
         - 2**-12
-        - 2**-13
+        - 2**-13     
         - 2**-14
         - 2**-15
         - 2**-16
+        - 2**-18
+        - 2**-19
+        - 2**-20
+
+    seed: 
+        values: [42, 45]
+    nb_epochs:
+        value: 150
+    dataset:
+        value: "CIFAR10"
+    validation: 
+        value: True
+    momentum: 
+        value: 0 
+    meta_learning_rate: 
+        values:
+        - 0.5
+        - 0.7
+        - 0.9
+        - 0.99
+    mu_scaling_factor: 
+        values: 
         - 2**-17
         - 2**-18
         - 2**-19
@@ -40,30 +58,14 @@ parameters:
         - 2**-23
         - 2**-24
         - 2**-25
-    seed: 
-        value: 42
-    nb_epochs:
-        value: 100
-    dataset:
-        value: "CIFAR10"
-    validation: 
-        value: True
-    momentum: 
-        values:
-        - 0.01
-        - 0.1
-        - 0.3
-        - 0.5
-        - 0.7
-        - 0.9
-        - 0.99
     dampening:
         value: False 
     zero_masking:
         value: False
     nesterov:
         value: False
-
+    num_layers: 
+        value: 3
 
 command:
   - ${env}
