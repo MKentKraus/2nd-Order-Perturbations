@@ -3,7 +3,7 @@
 import torch
 import torch.nn.functional as F
 import scipy
-
+import utils
 
 class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weight"""
@@ -124,16 +124,11 @@ class WPLinearFunc(torch.autograd.Function):
         dims = torch.ones(len(shape), dtype=torch.int8).tolist()
         dims[0] = shape[0]
         if orthogonal_perts:
-            u, _, vh = torch.linalg.svd(sampler(shape), full_matrices=False)
-            noise = u @ vh * sigma.repeat(dims) + mu.repeat(dims) * mu_scaling_factor
+            print("haha")
+            
+            noise = utils.gram_schmidt(sampler(shape)) * sigma.repeat(dims)
+                + mu.repeat(dims) * mu_scaling_factor
 
-            """
-            noise = torch.empty((shape))  # batch,
-            for i in range(shape[0]):
-                noise[i, :, :] = torch.tensor(
-                    scipy.stats.ortho_group.rvs(shape[2]).T[:500, :]
-                )
-            """
         else:
             noise = (
                 sampler(shape) * sigma.repeat(dims)

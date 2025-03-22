@@ -341,6 +341,30 @@ def construct_dataloaders(
     return train_loader, test_loader, in_shape, out_shape
 
 
+@staticmethod
+def gram_schmidt(input):
+    """Orthogonalize a set of vectors stored as the columns of matrix A."""
+    shape = input.shape
+    num_perts = shape[0]
+    input = input.reshape(
+        num_perts, -1
+    ).t()  # input is flattened over the weights, and then turned so the perturbations form the columns
+
+    for pert in range(num_perts):
+        for previus_pert in range(pert):
+            # print(torch.dot(input[:, previus_pert], input[:, pert]))
+            input[:, pert] -= (
+                torch.dot(input[:, previus_pert], input[:, pert])
+                / torch.dot(input[:, previus_pert], input[:, previus_pert])
+                * input[:, previus_pert]
+            )
+            # print(torch.dot(input[:, previus_pert], input[:, pert]))
+
+    input = input.t().reshape(shape)
+
+    return input
+
+
 def next_epoch(
     network,
     metrics,
