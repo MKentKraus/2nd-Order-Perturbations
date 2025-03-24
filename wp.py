@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import scipy
 import utils
 
+
 class WPLinearFunc(torch.autograd.Function):
     """Linear layer with noise injection at weight"""
 
@@ -124,10 +125,11 @@ class WPLinearFunc(torch.autograd.Function):
         dims = torch.ones(len(shape), dtype=torch.int8).tolist()
         dims[0] = shape[0]
         if orthogonal_perts:
-            print("haha")
-            
-            noise = utils.gram_schmidt(sampler(shape)) * sigma.repeat(dims)
+
+            noise = (
+                utils.gram_schmidt(sampler(shape)) * sigma.repeat(dims)
                 + mu.repeat(dims) * mu_scaling_factor
+            )
 
         else:
             noise = (
@@ -347,12 +349,20 @@ class WPLinear(torch.nn.Linear):
                     torch.mul(self.weight_mu, self.meta_lr)
                     + (1 - self.meta_lr) * self.weight.grad
                 )
+                # self.weight_sigma =  = (
+                #   torch.mul(self.self.weight_sigma, self.meta_lr)
+                #   + (1 - self.meta_lr) * self.weight.grad * self.mu_scaling_factor
+                # )
 
                 if self.bias is not None:
                     self.bias_mu = (
                         self.bias_mu * self.meta_lr
                         + (1 - self.meta_lr) * self.bias.grad
                     )
+                    #  self.bias_mu = (
+                    #    self.bias_sigma * self.meta_lr
+                    #    + (1 - self.meta_lr) * self.bias.grad * self.mu_scaling_factor
+                    # )
 
         elif "grad" in self.pert_type.lower():
 
