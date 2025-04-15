@@ -32,6 +32,11 @@ def run(config) -> None:
     else:
         lr = eval(config.learning_rate)
 
+    if isinstance(config.sigma, float) or isinstance(config.sigma, int):
+        sigma = config.sigma
+    else:
+        sigma = eval(config.sigma)
+
     if isinstance(config.meta_learning_rate, float) or isinstance(
         config.meta_learning_rate, int
     ):
@@ -39,17 +44,17 @@ def run(config) -> None:
     else:
         meta_learning_rate = eval(config.meta_learning_rate)
 
-    if isinstance(config.sigma, float) or isinstance(config.sigma, int):
-        sigma = config.sigma
-    else:
-        sigma = eval(config.sigma)
-
     if isinstance(config.mu_scaling_factor, float) or isinstance(
         config.mu_scaling_factor, int
     ):
         mu_scaling_factor = config.mu_scaling_factor
     else:
         mu_scaling_factor = eval(config.mu_scaling_factor)
+
+    if config.mu_scaling_factor == 0 and "meta" in config.algorithm:
+        mu_scaling_factor = lr
+        print("here")
+
     # Initializing random seeding
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -176,6 +181,7 @@ def run(config) -> None:
         ).to(device)
         network = BPNet(model)
 
+    network.to(torch.double)
     # Initialize metric storage
     metrics = utils.init_metric(config.comp_angles)
 
@@ -220,9 +226,14 @@ def run(config) -> None:
     else:
         raise ValueError()
 
-    # measuring speed of one pass
-    # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func, config.algorithm, config.num_perts)
-
+        # measuring speed of one pass
+        # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func, config.algorithm, config.num_perts)    if "ffd" in config.algorithm.lower():
+    """ 
+    if "ffd" in config.algorithm.lower():
+        network.load_state_dict(
+            torch.load("/home/markra/outputs/32_FFD.pth", weights_only=True)
+        )
+    """
     # main training loop
     with tqdm(range(config.nb_epochs)) as t:
         for e in t:
@@ -248,6 +259,14 @@ def run(config) -> None:
             ):
                 print("NaN detected, aborting training")
                 break
+
+            if e == 115 and config.save_model:
+                torch.save(network.state_dict(), "/home/markra/outputs/32_FFD.pth")
+                print("model saved, quitting")
+                break
+
+            ### Early stopping below here
+            """   
 
             if config.validation and (
                 e > 10 and metrics["test"]["acc"][-1] < 12
@@ -281,12 +300,13 @@ def run(config) -> None:
                 )
                 break
             if config.validation and (
-                (e > 100) and metrics["test"]["acc"][-1] < 29
+                (e == 100) and metrics["test"]["acc"][-1] < 29
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"
                 )
                 break
+            """
     if config.comp_angles:
         wandb.log(
             {

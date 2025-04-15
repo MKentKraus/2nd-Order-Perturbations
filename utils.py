@@ -17,7 +17,9 @@ def make_dist_sampler(
     """Create a distribution sampler for the noise"""
 
     if distribution.lower() == "normal":
-        dist_sampler = lambda x: (torch.empty(x, device=device).normal_(mean=0, std=1))
+        dist_sampler = lambda x: (
+            torch.empty(x, device=device, dtype=torch.float64).normal_(mean=0, std=1)
+        )
 
     elif distribution.lower() == "bernoulli":
         distribution = torch.distributions.Bernoulli(
@@ -121,7 +123,7 @@ def load_dataset(dataset_importer, device, fltype, validation, mean, std):
             train_dataset = torchvision.datasets.ImageFolder(train_datasetpath)
             test_dataset = torchvision.datasets.ImageFolder(test_datasetpath)
 
-            x_test = np.empty((len(test_dataset.targets), 3, 64, 64), dtype=np.float32)
+            x_test = np.empty((len(test_dataset.targets), 3, 64, 64), dtype=np.float64)
             y_test = np.empty((len(test_dataset.targets)))
             for indx, (img, label) in enumerate(test_dataset.imgs):
                 x_test[indx] = torchvision.transforms.ToTensor()(
@@ -136,7 +138,7 @@ def load_dataset(dataset_importer, device, fltype, validation, mean, std):
             np.save("./datasets/tiny-imagenet-200/y_test.npy", y_test)
 
             x_train = np.empty(
-                (len(train_dataset.targets), 3, 64, 64), dtype=np.float32
+                (len(train_dataset.targets), 3, 64, 64), dtype=np.float64
             )
             y_train = np.empty((len(train_dataset.targets)))
             for indx, (img, label) in enumerate(train_dataset.imgs):
@@ -319,7 +321,7 @@ def construct_dataloaders(
             x_train, y_train, x_test, y_test = load_dataset(
                 tv_dataset,
                 device,
-                torch.float32,
+                torch.float64,
                 validation=validation,
                 mean=mean,
                 std=std,
@@ -353,6 +355,7 @@ def gram_schmidt(input):
     for pert in range(num_perts):
         for previus_pert in range(pert):
             # print(torch.dot(input[:, previus_pert], input[:, pert]))
+
             input[:, pert] -= (
                 torch.dot(input[:, previus_pert], input[:, pert])
                 / torch.dot(input[:, previus_pert], input[:, previus_pert])
@@ -521,8 +524,7 @@ def train(
         onehots = (
             torch.nn.functional.one_hot(target, num_classes).to(device).to(data.dtype)
         )
-        data, target = data.to(device), target.to(device)
-
+        data, target = data.to(device).to(torch.double), target.to(device)
         if (
             batch_idx == len(train_loader) - 2 or batch_idx == len(train_loader) - 3
         ) and comp_angles:
@@ -589,8 +591,8 @@ def test(
                 .to(device)
                 .to(data.dtype)
             )
+            data, target = data.to(device).to(torch.double), target.to(device)
 
-            data, target = data.to(device), target.to(device)
             loss, output = model.test_step(data, target, onehots, loss_func)
             test_loss += loss
             pred = output.argmax(dim=1, keepdim=True)
