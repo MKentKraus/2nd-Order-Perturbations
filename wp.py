@@ -118,13 +118,13 @@ class WPLinearFunc(torch.autograd.Function):
         dims[0] = shape[0]
         if orthogonal_perts:
             noise = torch.nn.init.orthogonal_(
-                torch.ones(size=shape, device="cuda:0"), gain=sigma
-            )  # gain=sigma
-            square_norm = torch.sum(torch.pow(noise.flatten(1), 2), dim=(-1))
+                torch.empty(size=shape, device="cuda:0"), gain=sigma
+            )
         else:
             noise = sampler(shape) * sigma.repeat(dims)
-            square_norm = torch.sum(torch.pow(noise.flatten(1), 2), dim=(-1))
         noise += mu.repeat(dims)
+        square_norm = torch.sum(torch.pow(noise.flatten(1), 2), dim=(-1))
+
         return noise, square_norm
 
     @staticmethod
@@ -285,9 +285,8 @@ class WPLinear(torch.nn.Linear):
                 self.orthogonal_perts,
             )
 
+        ### Different ways to estimate the gradient
         if "greedy" in self.pert_type.lower():
-            torch.manual_seed(self.seed)
-
             scaling_factor = torch.sum(scaling_factor, dim=0)
             max_grad_index = torch.argmax(scaling_factor)
             scaling_factor = scaling_factor[max_grad_index]
@@ -300,13 +299,44 @@ class WPLinear(torch.nn.Linear):
 
             if self.bias is not None:
                 b_noise = b_noise[max_grad_index]
-
                 self.bias.grad = torch.mul(
                     scaling_factor,
                     b_noise,
                 )
+
+        elif "weighted" in self.pert_type.lower():
+            scaling_factor = torch.sum(scaling_factor, dim=0)
+            ratio = torch.abs(
+                scaling_factor / torch.sum(torch.abs(scaling_factor))
+            )  # no, point is to preserve original magnitude - this scales down even the "good" gradients
+
+            scaled_weight_diff = torch.mul(
+                scaling_factor[:, None, None],
+                w_noise,
+            )
+
+            self.weight.grad = torch.div(
+                torch.sum(
+                    torch.mul(scaled_weight_diff, ratio[:, None, None]), dim=0
+                ),  # weighted sum
+                torch.sum(ratio),  # weights
+            )
+
+            if self.bias is not None:
+                scaled_bias_diff = torch.mul(
+                    scaling_factor[:, None],
+                    b_noise,
+                )
+
+                self.bias.grad = torch.div(
+                    torch.sum(
+                        torch.mul(scaled_bias_diff, ratio[:, None]), dim=0
+                    ),  # weighted sum
+                    torch.sum(ratio),  # weights
+                )
         else:
             scaling_factor = torch.sum(scaling_factor, dim=0)
+
             scaled_weight_diff = torch.mul(
                 scaling_factor[:, None, None],
                 w_noise,
@@ -324,8 +354,8 @@ class WPLinear(torch.nn.Linear):
 
                 self.bias.grad = torch.mean(scaled_bias_diff, axis=0)
 
+        ### Keeping track of past gradients for use.
         if "meta" in self.pert_type.lower():
-
             if self.first_gradient:
                 self.weight_mu = self.weight.grad * self.mu_scaling_factor
 
@@ -344,14 +374,13 @@ class WPLinear(torch.nn.Linear):
                         torch.mul(self.bias_mu, self.meta_lr) + self.bias.grad
                     ) * self.mu_scaling_factor
 
-        if "meta-pert" in self.pert_type.lower():
+        if "dmomentum" in self.pert_type.lower():
 
             if self.first_gradient:
                 self.weight_mu = torch.mean(
                     w_noise,
                     dim=0,
                 )
-
                 if self.bias is not None:
 
                     self.bias_mu = torch.mean(
@@ -362,21 +391,30 @@ class WPLinear(torch.nn.Linear):
 
             else:
                 # reg_term = 0.1
+                """
+                print("before assignment")
 
-                self.weight_mu = torch.mul(self.weight_mu, self.meta_lr) + torch.mean(
+                print(self.weight_mu[0, :5])
+                print(
+                    torch.mean(
+                        w_noise,
+                        dim=0,
+                    )[0, :5]
+                )
+                """
+                self.weight_mu = self.weight_mu * self.meta_lr + torch.mean(
                     w_noise,
                     dim=0,
-                )
+                ) * (1 - self.meta_lr) * (-torch.sign(self.weight.grad))
+
+                # print(self.weight_mu[0, :5])
+                # print("after assignment \n")
 
                 if self.bias is not None:
-                    self.bias_mu = (
-                        torch.mul(self.bias_mu, self.meta_lr)
-                        + torch.mean(
-                            b_noise,
-                            dim=0,
-                        )
-                        # * torch.sign(self.bias.grad)- self.bias_mu * reg_term
-                    )
+                    self.bias_mu = (self.bias_mu * self.meta_lr) + torch.mean(
+                        b_noise,
+                        dim=0,
+                    ) * (1 - self.meta_lr) * (-torch.sign(self.bias.grad))
 
     def get_noise_squarednorm(self):
         assert self.square_norm is not None, "square_norm has not been computed"
