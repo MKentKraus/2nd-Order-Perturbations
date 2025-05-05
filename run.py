@@ -181,7 +181,6 @@ def run(config) -> None:
         ).to(device)
         network = BPNet(model)
 
-    network.to(torch.double)
     # Initialize metric storage
     metrics = utils.init_metric(config.comp_angles)
 
@@ -228,12 +227,12 @@ def run(config) -> None:
 
         # measuring speed of one pass
         # flops.FLOP_step_track(config.dataset, network, device, out_shape, loss_func, config.algorithm, config.num_perts)    if "ffd" in config.algorithm.lower():
-    """ 
-    if "ffd" in config.algorithm.lower():
-        network.load_state_dict(
-            torch.load("/home/markra/outputs/32_FFD.pth", weights_only=True)
-        )
-    """
+
+    # if "ffd" in config.algorithm.lower():
+    #    network.load_state_dict(
+    #        torch.load("/home/markra/outputs/32_FFD.pth", weights_only=True)
+    #    )
+
     # main training loop
     with tqdm(range(config.nb_epochs)) as t:
         for e in t:
@@ -261,11 +260,19 @@ def run(config) -> None:
                 break
 
             if e == 115 and config.save_model:
-                torch.save(network.state_dict(), "/home/markra/outputs/32_FFD.pth")
+                torch.save(network.state_dict(), "/home/markra/outputs/rename.pth")
                 print("model saved, quitting")
                 break
 
             ### Early stopping below here
+            if config.validation and (
+                (e > 20 and metrics["test"]["acc"][-1] < 15)
+                or metrics["test"]["loss"][-1] > 5
+            ):  # early stopping, but only when not testing.
+                print(
+                    "Network is not learning fast enough, or has too high of a loss, aborting training"
+                )
+                break
             """   
 
             if config.validation and (
@@ -276,14 +283,7 @@ def run(config) -> None:
                 )
                 break
 
-            if config.validation and (
-                (e > 20 and metrics["test"]["acc"][-1] < 15)
-                or metrics["test"]["loss"][-1] > 2.8
-            ):  # early stopping, but only when not testing.
-                print(
-                    "Network is not learning fast enough, or has too high of a loss, aborting training"
-                )
-                break
+
             if config.validation and (
                 (e > 40 and metrics["test"]["acc"][-1] < 20)
                 or metrics["test"]["loss"][-1] > 2.8
