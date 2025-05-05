@@ -365,9 +365,9 @@ class WPLinear(torch.nn.Linear):
                     ) * self.mu_scaling_factor
 
         if "dmomentum" in self.pert_type.lower():
+            weighting = scaling_factor / torch.sum(torch.abs(scaling_factor))
 
             if self.first_gradient:
-                weighting = scaling_factor / torch.sum(scaling_factor)
                 self.weight_mu = (
                     torch.mean(
                         weighting[:, None, None] * w_noise,
@@ -388,7 +388,6 @@ class WPLinear(torch.nn.Linear):
                 self.first_gradient = False
 
             else:
-                weighting = scaling_factor / torch.sum(torch.abs(scaling_factor))
 
                 self.weight_mu = (
                     self.weight_mu
