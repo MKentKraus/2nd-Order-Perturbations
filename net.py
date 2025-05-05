@@ -40,30 +40,14 @@ class PerturbNet(torch.nn.Module):
             x = x.repeat(dim)
         return self.network(x)
 
-    def apply_grad_scaling_to_noise_layers(self, network, scaling):
+    def apply_loss_differential_to_noise_layers(self, network, loss_differential):
         for child in network.children():  # iterates over layers of the network.
             # are you a container?
             if len(list(child.children())) > 0:
-                self.apply_grad_scaling_to_noise_layers(child, scaling)
+                self.apply_loss_differential_to_noise_layers(child, loss_differential)
             else:
                 if hasattr(child, "update_grads"):
-                    child.update_grads(scaling)
-
-    def get_network_noise_normalizers(self, network):
-        num_parameters = 0
-        normalizer = 0
-        for child in network.children():
-            # are you a container?
-            if len(list(child.children())) > 0:
-                ps, ns = self.get_network_noise_normalizers(child)
-                num_parameters += ps
-                normalizer += ns
-            else:
-                if hasattr(child, "get_noise_squarednorm"):
-                    num_parameters += child.get_number_perturbed_params()
-                    normalizer += child.get_noise_squarednorm()
-
-        return num_parameters, normalizer
+                    child.update_grads(loss_differential)
 
     def get_normalization(self, network):
         num_params, normalizer = self.get_network_noise_normalizers(network)
@@ -148,14 +132,8 @@ class PerturbNet(torch.nn.Module):
 
     @torch.inference_mode()
     def backward_pass(self, loss_differential):
-        normalization = self.get_normalization(self.network).unsqueeze(
-            1
-        )  # dim [num_perts, 1]
 
-        grad_scaling = torch.mul(
-            loss_differential, normalization
-        ).t()  # Loss, across perturbations [num_perts, batch_size]
-        self.apply_grad_scaling_to_noise_layers(self.network, grad_scaling)
+        self.apply_loss_differential_to_noise_layers(self.network, loss_differential)
 
     @torch.inference_mode()
     def test_step(self, data, target, onehots, loss_func):
