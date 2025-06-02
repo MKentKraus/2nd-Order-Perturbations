@@ -300,7 +300,17 @@ class WPLinear(torch.nn.Linear):
 
         elif "weighted" in self.pert_type.lower():  # weighted average of perturbations
             scaling_factor = torch.sum(scaling_factor, dim=1)
-            ratio = torch.abs(scaling_factor / torch.sum(torch.abs(scaling_factor)))
+
+            if "abs" in self.pert_type.lower():
+                ratio = torch.abs(scaling_factor / torch.sum(torch.abs(scaling_factor)))
+            elif "l2" in self.pert_type.lower():
+                ratio = (scaling_factor**2) / torch.sum(scaling_factor**2)
+            elif "softmax" in self.pert_type.lower():
+                ratio = torch.softmax(scaling_factor, axis=0) / torch.sum(
+                    torch.softmax(scaling_factor, axis=0)
+                )
+            else:
+                raise Exception("Other weighting types not implemented")
 
             scaled_weight_diff = torch.mul(
                 scaling_factor[:, None, None],
@@ -326,6 +336,7 @@ class WPLinear(torch.nn.Linear):
                     ),  # weighted sum
                     torch.sum(ratio),  # weights
                 )
+
         else:  # average of multiple perturbations
             scaling_factor = torch.sum(scaling_factor, dim=1)
             scaled_weight_diff = torch.mul(
