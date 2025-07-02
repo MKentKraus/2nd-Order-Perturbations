@@ -1,7 +1,7 @@
 program: /home/markra/2nd-Order-Perturbations/run.py
 project: MetaWP
 entity: brai-lab 
-name:  3-layer greedy (non-orthogonal) validation sweep, CIFAR10
+name: Influence of sigma for "good" CFD learning rates at 3 layers and 1 pert
 method: grid
 metric:
   goal: maximize
@@ -9,22 +9,17 @@ metric:
 parameters:
   algorithm:
     values:
-      - greedy_FFD
-      - greedy_CFD
+      - CFD
   comp_angles:
-    value: false
+    value: False
   dampening:
     value: false
   dataset:
     value: CIFAR10
   learning_rate:
     values:
-      - 2**-20
-      - 2**-21
-      - 2**-22
-      - 2**-23
-      - 2**-24
-      - 2**-25
+    - 2**-23
+    - 2**-24
   meta_learning_rate:
     value: 0
   momentum:
@@ -32,27 +27,58 @@ parameters:
   mu_scaling_factor:
     value: 0
   nb_epochs:
-    value: 150
+    value: 200
   nesterov:
     value: false
   num_layers:
-    value: nn3
+    values: 
+      - 3
   num_perts:
     values:
-      - 32
+      - 1
   orthogonal_perts:
-    value: false
+    value: False
   seed:
-    values:
+    values: 
       - 42
   sigma:
     values:
-      - 2**-12
-      - 2**-17
+    - 2**-1
+    - 2**-2
+    - 2**-3
+    - 2**-4
+    - 2**-5
+    - 2**-6
+    - 2**-7
+    - 2**-8
+    - 2**-9
+    - 2**-10
+    - 2**-11
+    - 2**-12
+    - 2**-13
+    - 2**-14
+    - 2**-15
+    - 2**-16
+    - 2**-17
+    - 2**-18
+    - 2**-19
+    - 2**-20
+    - 2**-21
+    - 2**-22
+    - 2**-23
+    - 2**-24
+    - 2**-25
+    - 2**-26
+    - 2**-27
+    - 2**-28
+    - 2**-29
+    - 2**-30
   validation:
-    value: true
+    value: True
   zero_masking:
     value: false
+program: /home/markra/2nd-Order-Perturbations/run.py
+project: MetaWP
 
 
 command:

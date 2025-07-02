@@ -264,16 +264,15 @@ def run(config) -> None:
                 print("model saved, quitting")
                 break
 
+            """
             ### Early stopping below here
-            if config.validation and (
-                (e > 20 and metrics["test"]["acc"][-1] < 15)
-                or metrics["test"]["loss"][-1] > 5
+            if (
+                config.validation and metrics["test"]["loss"][-1] > 100
             ):  # early stopping, but only when not testing.
                 print(
                     "Network is not learning fast enough, or has too high of a loss, aborting training"
                 )
                 break
-            """   
 
             if config.validation and (
                 e > 10 and metrics["test"]["acc"][-1] < 12

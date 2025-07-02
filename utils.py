@@ -555,7 +555,7 @@ def train(
 
     if comp_angles:
         ose = (wp_loss[0] - wp_loss[1]) / (
-            bp_loss[0] - bp_loss[1] + 1e-16
+            bp_loss[0] - bp_loss[1] + 1e-12
         )  # loss improvement in WP over the loss improvement in BP
         train_results.append(ose)
 
