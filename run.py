@@ -175,10 +175,21 @@ def run(config) -> None:
         config.comp_angles = (
             False  # BP networks do not need to compare angles with BP updates
         )
-        model = torch.nn.Sequential(
-            torch.nn.Flatten(),
-            torch.nn.Linear(in_shape, out_shape),
-        ).to(device)
+        if config.num_layers == 1:
+
+            model = torch.nn.Sequential(
+                torch.nn.Flatten(),
+                torch.nn.Linear(in_shape, out_shape),
+            ).to(device)
+        elif config.num_layers == 3:
+            model = torch.nn.Sequential(
+                torch.nn.Flatten(),
+                torch.nn.Linear(in_shape, 500),
+                torch.nn.ReLU(),
+                torch.nn.Linear(500, 500),
+                torch.nn.ReLU(),
+                torch.nn.Linear(500, out_shape),
+            ).to(device)
         network = BPNet(model)
 
     # Initialize metric storage
