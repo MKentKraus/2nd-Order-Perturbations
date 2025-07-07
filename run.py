@@ -217,21 +217,6 @@ def run(config) -> None:
                 print("NaN detected, aborting training")
                 break
 
-            if config.validation and (
-                (e == 20 and metrics["test"]["acc"][-1] < 20)
-                or metrics["test"]["loss"][-1] > 2.8
-            ):  # early stopping, but only when not testing.
-                print(
-                    "Network is not learning fast enough, or has too high of a loss, aborting training"
-                )
-                break
-            if config.validation and (
-                e == 50 and metrics["test"]["acc"][-1] < 24
-            ):  # early stopping, but only when not testing.
-                print(
-                    "Network is not learning fast enough, or has too high of a loss, aborting training"
-                )
-                break
     if config.comp_angles:
         wandb.log(
             {

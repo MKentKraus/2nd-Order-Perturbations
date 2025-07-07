@@ -202,20 +202,23 @@ class WPLinear(torch.nn.Linear):
         w_noise_shape = [self.num_perts] + list(self.weight.shape)
 
         if self.zero_masking:
-            scaling_factor = torch.mul(
+
+            scaled_factor = torch.mul(
                 scaling_factor[:, :, None], self.mask[:, None, :]
-            )
+            )  # [batch, pert] * [batch, in] -> [batch, pert, in]
 
             scaled_weight_diff = torch.mul(
-                scaling_factor[:, :, None, :],
+                scaled_factor[:, :, None, :],
                 WPLinearFunc.sample_noise(
                     self.dist_sampler, w_noise_shape, self.sigma, self.orthogonal_perts
                 )[None, :, :, :],
-            )  # [batch, pert, in] * [1, pert, out, in]
+            )  # [batch, pert, in] * [1, pert, out, in] -> [batch, pert, out, in]
 
-            self.weight.grad = torch.sum(torch.mean(scaled_weight_diff, axis=0), dim=0)
+            self.weight.grad = torch.mean(torch.sum(scaled_weight_diff, dim=0), axis=0)
 
-            scaling_factor = torch.sum(torch.mean(scaling_factor, dim=-1), dim=0)
+            # torch.sum(torch.mean(scaled_weight_diff, axis=0), dim=0)
+
+            scaling_factor = torch.sum(scaling_factor, dim=0)
 
         else:
             scaling_factor = torch.sum(scaling_factor, dim=0)

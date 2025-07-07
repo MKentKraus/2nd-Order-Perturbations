@@ -321,7 +321,6 @@ def WP_linear_flops(layer, num_perts, algorithm):
         )
         # cost of meaning operation for weights and biases. Assumes that pytorch does not actually perform meaning when there is only one element to mean over.
 
-    print("this is WP linear layer")
     return (
         forward_pass_flops[0],
         backward_pass_flops[0],
