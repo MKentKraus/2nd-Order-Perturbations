@@ -123,7 +123,7 @@ class WPLinearFunc(torch.autograd.Function):
         dims = torch.ones(len(shape), dtype=torch.int8).tolist()
         dims[0] = shape[0]
         if orthogonal_perts:
-            noise = torch.nn.init.orthogonal_(torch.empty(size=shape, device=device))
+            noise = torch.nn.init.orthogonal_(torch.empty(size=shape, device="cuda:0"))
 
             if len(shape) == 2:
                 noise = noise * (np.sqrt(shape[1]))
